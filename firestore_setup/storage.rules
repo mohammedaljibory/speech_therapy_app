@@ -1,0 +1,113 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    function isAudio() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+    
+    function isPDF() {
+      return request.resource.contentType == 'application/pdf';
+    }
+    
+    // Max file sizes
+    function isValidImageSize() {
+      return request.resource.size < 5 * 1024 * 1024; // 5MB
+    }
+    
+    function isValidAudioSize() {
+      return request.resource.size < 10 * 1024 * 1024; // 10MB
+    }
+    
+    function isValidPDFSize() {
+      return request.resource.size < 20 * 1024 * 1024; // 20MB
+    }
+    
+    // ============================================
+    // Word Images
+    // ============================================
+    match /images/words/{categoryId}/{fileName} {
+      // Anyone authenticated can read word images
+      allow read: if isAuthenticated();
+      
+      // Trainers can upload images
+      allow write: if isAuthenticated() && isImage() && isValidImageSize();
+    }
+    
+    // ============================================
+    // Profile Images
+    // ============================================
+    match /images/profiles/users/{userId}/{fileName} {
+      // Anyone can read profile images
+      allow read: if isAuthenticated();
+      
+      // Users can only upload their own profile image
+      allow write: if isAuthenticated() 
+        && request.auth.uid == userId 
+        && isImage() 
+        && isValidImageSize();
+    }
+    
+    match /images/profiles/children/{childId}/{fileName} {
+      // Trainers can read/write children profile images
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isImage() && isValidImageSize();
+    }
+    
+    // ============================================
+    // Category Images
+    // ============================================
+    match /images/categories/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isImage() && isValidImageSize();
+    }
+    
+    // ============================================
+    // Correct Pronunciation Audio
+    // ============================================
+    match /audio/correct_pronunciations/{categoryId}/{fileName} {
+      // Anyone authenticated can read correct pronunciations
+      allow read: if isAuthenticated();
+      
+      // Trainers can upload
+      allow write: if isAuthenticated() && isAudio() && isValidAudioSize();
+    }
+    
+    // ============================================
+    // Child Recordings
+    // ============================================
+    match /audio/child_recordings/{childId}/{date}/{fileName} {
+      // Read access for trainers and parents
+      allow read: if isAuthenticated();
+      
+      // Trainers can upload recordings
+      allow write: if isAuthenticated() && isAudio() && isValidAudioSize();
+      
+      // Allow delete for cleanup
+      allow delete: if isAuthenticated();
+    }
+    
+    // ============================================
+    // Reports (PDF)
+    // ============================================
+    match /reports/{childId}/{fileName} {
+      // Trainers and parents can read reports
+      allow read: if isAuthenticated();
+      
+      // Trainers can upload reports
+      allow write: if isAuthenticated() && isPDF() && isValidPDFSize();
+    }
+  }
+}

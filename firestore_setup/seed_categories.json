@@ -1,0 +1,136 @@
+{
+  "categories": [
+    {
+      "id": "math",
+      "name": "رياضيات",
+      "nameEn": "Mathematics",
+      "icon": "calculate",
+      "colorValue": 4283215696,
+      "description": "الأرقام والعمليات الحسابية",
+      "wordCount": 0,
+      "order": 0,
+      "isActive": true
+    },
+    {
+      "id": "science",
+      "name": "علوم",
+      "nameEn": "Science",
+      "icon": "science",
+      "colorValue": 4280391411,
+      "description": "العلوم الطبيعية والتجارب",
+      "wordCount": 0,
+      "order": 1,
+      "isActive": true
+    },
+    {
+      "id": "islamic",
+      "name": "إسلامية",
+      "nameEn": "Islamic Studies",
+      "icon": "mosque",
+      "colorValue": 4288423856,
+      "description": "التربية الإسلامية",
+      "wordCount": 0,
+      "order": 2,
+      "isActive": true
+    },
+    {
+      "id": "shapes",
+      "name": "أشكال",
+      "nameEn": "Shapes",
+      "icon": "category",
+      "colorValue": 4294940672,
+      "description": "الأشكال الهندسية",
+      "wordCount": 0,
+      "order": 3,
+      "isActive": true
+    },
+    {
+      "id": "colors",
+      "name": "ألوان",
+      "nameEn": "Colors",
+      "icon": "palette",
+      "colorValue": 4293467747,
+      "description": "الألوان المختلفة",
+      "wordCount": 0,
+      "order": 4,
+      "isActive": true
+    },
+    {
+      "id": "animals",
+      "name": "حيوانات",
+      "nameEn": "Animals",
+      "icon": "pets",
+      "colorValue": 4285887861,
+      "description": "الحيوانات الأليفة والبرية",
+      "wordCount": 0,
+      "order": 5,
+      "isActive": true
+    },
+    {
+      "id": "food",
+      "name": "طعام",
+      "nameEn": "Food",
+      "icon": "restaurant",
+      "colorValue": 4294924066,
+      "description": "الأطعمة والمشروبات",
+      "wordCount": 0,
+      "order": 6,
+      "isActive": true
+    },
+    {
+      "id": "body",
+      "name": "جسم الإنسان",
+      "nameEn": "Human Body",
+      "icon": "accessibility_new",
+      "colorValue": 4284513675,
+      "description": "أعضاء الجسم",
+      "wordCount": 0,
+      "order": 7,
+      "isActive": true
+    },
+    {
+      "id": "family",
+      "name": "العائلة",
+      "nameEn": "Family",
+      "icon": "family_restroom",
+      "colorValue": 4289533015,
+      "description": "أفراد العائلة",
+      "wordCount": 0,
+      "order": 8,
+      "isActive": true
+    },
+    {
+      "id": "clothes",
+      "name": "ملابس",
+      "nameEn": "Clothes",
+      "icon": "checkroom",
+      "colorValue": 4278228616,
+      "description": "الملابس والأزياء",
+      "wordCount": 0,
+      "order": 9,
+      "isActive": true
+    },
+    {
+      "id": "home",
+      "name": "المنزل",
+      "nameEn": "Home",
+      "icon": "home",
+      "colorValue": 4283315246,
+      "description": "أثاث ومحتويات المنزل",
+      "wordCount": 0,
+      "order": 10,
+      "isActive": true
+    },
+    {
+      "id": "transport",
+      "name": "مواصلات",
+      "nameEn": "Transportation",
+      "icon": "directions_car",
+      "colorValue": 4294198070,
+      "description": "وسائل النقل والمواصلات",
+      "wordCount": 0,
+      "order": 11,
+      "isActive": true
+    }
+  ]
+}

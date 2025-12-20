@@ -1,0 +1,484 @@
+{
+  "words": {
+    "math": [
+      {
+        "id": "math_1",
+        "text": "واحد",
+        "textEn": "One",
+        "phonetic": "وَاحِد",
+        "difficulty": 1,
+        "description": "الرقم 1"
+      },
+      {
+        "id": "math_2",
+        "text": "اثنان",
+        "textEn": "Two",
+        "phonetic": "اِثْنَان",
+        "difficulty": 1,
+        "description": "الرقم 2"
+      },
+      {
+        "id": "math_3",
+        "text": "ثلاثة",
+        "textEn": "Three",
+        "phonetic": "ثَلَاثَة",
+        "difficulty": 2,
+        "description": "الرقم 3"
+      },
+      {
+        "id": "math_4",
+        "text": "أربعة",
+        "textEn": "Four",
+        "phonetic": "أَرْبَعَة",
+        "difficulty": 2,
+        "description": "الرقم 4"
+      },
+      {
+        "id": "math_5",
+        "text": "خمسة",
+        "textEn": "Five",
+        "phonetic": "خَمْسَة",
+        "difficulty": 2,
+        "description": "الرقم 5"
+      },
+      {
+        "id": "math_6",
+        "text": "ستة",
+        "textEn": "Six",
+        "phonetic": "سِتَّة",
+        "difficulty": 2,
+        "description": "الرقم 6"
+      },
+      {
+        "id": "math_7",
+        "text": "سبعة",
+        "textEn": "Seven",
+        "phonetic": "سَبْعَة",
+        "difficulty": 2,
+        "description": "الرقم 7"
+      },
+      {
+        "id": "math_8",
+        "text": "ثمانية",
+        "textEn": "Eight",
+        "phonetic": "ثَمَانِيَة",
+        "difficulty": 3,
+        "description": "الرقم 8"
+      },
+      {
+        "id": "math_9",
+        "text": "تسعة",
+        "textEn": "Nine",
+        "phonetic": "تِسْعَة",
+        "difficulty": 2,
+        "description": "الرقم 9"
+      },
+      {
+        "id": "math_10",
+        "text": "عشرة",
+        "textEn": "Ten",
+        "phonetic": "عَشَرَة",
+        "difficulty": 2,
+        "description": "الرقم 10"
+      }
+    ],
+    "colors": [
+      {
+        "id": "color_1",
+        "text": "أحمر",
+        "textEn": "Red",
+        "phonetic": "أَحْمَر",
+        "difficulty": 2,
+        "description": "اللون الأحمر"
+      },
+      {
+        "id": "color_2",
+        "text": "أزرق",
+        "textEn": "Blue",
+        "phonetic": "أَزْرَق",
+        "difficulty": 2,
+        "description": "اللون الأزرق"
+      },
+      {
+        "id": "color_3",
+        "text": "أخضر",
+        "textEn": "Green",
+        "phonetic": "أَخْضَر",
+        "difficulty": 2,
+        "description": "اللون الأخضر"
+      },
+      {
+        "id": "color_4",
+        "text": "أصفر",
+        "textEn": "Yellow",
+        "phonetic": "أَصْفَر",
+        "difficulty": 2,
+        "description": "اللون الأصفر"
+      },
+      {
+        "id": "color_5",
+        "text": "برتقالي",
+        "textEn": "Orange",
+        "phonetic": "بُرْتُقَالِي",
+        "difficulty": 3,
+        "description": "اللون البرتقالي"
+      },
+      {
+        "id": "color_6",
+        "text": "أبيض",
+        "textEn": "White",
+        "phonetic": "أَبْيَض",
+        "difficulty": 2,
+        "description": "اللون الأبيض"
+      },
+      {
+        "id": "color_7",
+        "text": "أسود",
+        "textEn": "Black",
+        "phonetic": "أَسْوَد",
+        "difficulty": 2,
+        "description": "اللون الأسود"
+      },
+      {
+        "id": "color_8",
+        "text": "بنفسجي",
+        "textEn": "Purple",
+        "phonetic": "بَنَفْسَجِي",
+        "difficulty": 3,
+        "description": "اللون البنفسجي"
+      }
+    ],
+    "animals": [
+      {
+        "id": "animal_1",
+        "text": "قطة",
+        "textEn": "Cat",
+        "phonetic": "قِطَّة",
+        "difficulty": 1,
+        "description": "حيوان أليف"
+      },
+      {
+        "id": "animal_2",
+        "text": "كلب",
+        "textEn": "Dog",
+        "phonetic": "كَلْب",
+        "difficulty": 1,
+        "description": "حيوان أليف"
+      },
+      {
+        "id": "animal_3",
+        "text": "أسد",
+        "textEn": "Lion",
+        "phonetic": "أَسَد",
+        "difficulty": 2,
+        "description": "ملك الغابة"
+      },
+      {
+        "id": "animal_4",
+        "text": "فيل",
+        "textEn": "Elephant",
+        "phonetic": "فِيل",
+        "difficulty": 1,
+        "description": "حيوان كبير"
+      },
+      {
+        "id": "animal_5",
+        "text": "طائر",
+        "textEn": "Bird",
+        "phonetic": "طَائِر",
+        "difficulty": 2,
+        "description": "يطير في السماء"
+      },
+      {
+        "id": "animal_6",
+        "text": "سمكة",
+        "textEn": "Fish",
+        "phonetic": "سَمَكَة",
+        "difficulty": 2,
+        "description": "تعيش في الماء"
+      },
+      {
+        "id": "animal_7",
+        "text": "دجاجة",
+        "textEn": "Chicken",
+        "phonetic": "دَجَاجَة",
+        "difficulty": 2,
+        "description": "طائر داجن"
+      },
+      {
+        "id": "animal_8",
+        "text": "حصان",
+        "textEn": "Horse",
+        "phonetic": "حِصَان",
+        "difficulty": 2,
+        "description": "حيوان قوي"
+      }
+    ],
+    "shapes": [
+      {
+        "id": "shape_1",
+        "text": "دائرة",
+        "textEn": "Circle",
+        "phonetic": "دَائِرَة",
+        "difficulty": 2,
+        "description": "شكل مستدير"
+      },
+      {
+        "id": "shape_2",
+        "text": "مربع",
+        "textEn": "Square",
+        "phonetic": "مُرَبَّع",
+        "difficulty": 2,
+        "description": "أربعة أضلاع متساوية"
+      },
+      {
+        "id": "shape_3",
+        "text": "مثلث",
+        "textEn": "Triangle",
+        "phonetic": "مُثَلَّث",
+        "difficulty": 2,
+        "description": "ثلاثة أضلاع"
+      },
+      {
+        "id": "shape_4",
+        "text": "مستطيل",
+        "textEn": "Rectangle",
+        "phonetic": "مُسْتَطِيل",
+        "difficulty": 3,
+        "description": "أربعة أضلاع"
+      },
+      {
+        "id": "shape_5",
+        "text": "نجمة",
+        "textEn": "Star",
+        "phonetic": "نَجْمَة",
+        "difficulty": 2,
+        "description": "شكل النجمة"
+      },
+      {
+        "id": "shape_6",
+        "text": "قلب",
+        "textEn": "Heart",
+        "phonetic": "قَلْب",
+        "difficulty": 1,
+        "description": "شكل القلب"
+      }
+    ],
+    "body": [
+      {
+        "id": "body_1",
+        "text": "رأس",
+        "textEn": "Head",
+        "phonetic": "رَأْس",
+        "difficulty": 1,
+        "description": "أعلى الجسم"
+      },
+      {
+        "id": "body_2",
+        "text": "عين",
+        "textEn": "Eye",
+        "phonetic": "عَيْن",
+        "difficulty": 1,
+        "description": "للرؤية"
+      },
+      {
+        "id": "body_3",
+        "text": "أنف",
+        "textEn": "Nose",
+        "phonetic": "أَنْف",
+        "difficulty": 1,
+        "description": "للشم"
+      },
+      {
+        "id": "body_4",
+        "text": "فم",
+        "textEn": "Mouth",
+        "phonetic": "فَم",
+        "difficulty": 1,
+        "description": "للأكل والكلام"
+      },
+      {
+        "id": "body_5",
+        "text": "أذن",
+        "textEn": "Ear",
+        "phonetic": "أُذُن",
+        "difficulty": 1,
+        "description": "للسمع"
+      },
+      {
+        "id": "body_6",
+        "text": "يد",
+        "textEn": "Hand",
+        "phonetic": "يَد",
+        "difficulty": 1,
+        "description": "للإمساك"
+      },
+      {
+        "id": "body_7",
+        "text": "قدم",
+        "textEn": "Foot",
+        "phonetic": "قَدَم",
+        "difficulty": 1,
+        "description": "للمشي"
+      },
+      {
+        "id": "body_8",
+        "text": "أصبع",
+        "textEn": "Finger",
+        "phonetic": "إِصْبَع",
+        "difficulty": 2,
+        "description": "جزء من اليد"
+      }
+    ],
+    "food": [
+      {
+        "id": "food_1",
+        "text": "تفاحة",
+        "textEn": "Apple",
+        "phonetic": "تُفَّاحَة",
+        "difficulty": 2,
+        "description": "فاكهة حمراء"
+      },
+      {
+        "id": "food_2",
+        "text": "موز",
+        "textEn": "Banana",
+        "phonetic": "مَوْز",
+        "difficulty": 1,
+        "description": "فاكهة صفراء"
+      },
+      {
+        "id": "food_3",
+        "text": "خبز",
+        "textEn": "Bread",
+        "phonetic": "خُبْز",
+        "difficulty": 1,
+        "description": "طعام أساسي"
+      },
+      {
+        "id": "food_4",
+        "text": "حليب",
+        "textEn": "Milk",
+        "phonetic": "حَلِيب",
+        "difficulty": 2,
+        "description": "مشروب أبيض"
+      },
+      {
+        "id": "food_5",
+        "text": "ماء",
+        "textEn": "Water",
+        "phonetic": "مَاء",
+        "difficulty": 1,
+        "description": "للشرب"
+      },
+      {
+        "id": "food_6",
+        "text": "برتقالة",
+        "textEn": "Orange",
+        "phonetic": "بُرْتُقَالَة",
+        "difficulty": 3,
+        "description": "فاكهة برتقالية"
+      },
+      {
+        "id": "food_7",
+        "text": "بيضة",
+        "textEn": "Egg",
+        "phonetic": "بَيْضَة",
+        "difficulty": 2,
+        "description": "من الدجاج"
+      }
+    ],
+    "family": [
+      {
+        "id": "family_1",
+        "text": "أب",
+        "textEn": "Father",
+        "phonetic": "أَب",
+        "difficulty": 1,
+        "description": "الوالد"
+      },
+      {
+        "id": "family_2",
+        "text": "أم",
+        "textEn": "Mother",
+        "phonetic": "أُمّ",
+        "difficulty": 1,
+        "description": "الوالدة"
+      },
+      {
+        "id": "family_3",
+        "text": "أخ",
+        "textEn": "Brother",
+        "phonetic": "أَخ",
+        "difficulty": 1,
+        "description": "الشقيق"
+      },
+      {
+        "id": "family_4",
+        "text": "أخت",
+        "textEn": "Sister",
+        "phonetic": "أُخْت",
+        "difficulty": 1,
+        "description": "الشقيقة"
+      },
+      {
+        "id": "family_5",
+        "text": "جد",
+        "textEn": "Grandfather",
+        "phonetic": "جَدّ",
+        "difficulty": 1,
+        "description": "أب الأب أو الأم"
+      },
+      {
+        "id": "family_6",
+        "text": "جدة",
+        "textEn": "Grandmother",
+        "phonetic": "جَدَّة",
+        "difficulty": 1,
+        "description": "أم الأب أو الأم"
+      }
+    ],
+    "islamic": [
+      {
+        "id": "islamic_1",
+        "text": "الله",
+        "textEn": "Allah",
+        "phonetic": "الله",
+        "difficulty": 1,
+        "description": "اسم الله تعالى"
+      },
+      {
+        "id": "islamic_2",
+        "text": "مسجد",
+        "textEn": "Mosque",
+        "phonetic": "مَسْجِد",
+        "difficulty": 2,
+        "description": "بيت الله"
+      },
+      {
+        "id": "islamic_3",
+        "text": "صلاة",
+        "textEn": "Prayer",
+        "phonetic": "صَلَاة",
+        "difficulty": 2,
+        "description": "عبادة لله"
+      },
+      {
+        "id": "islamic_4",
+        "text": "قرآن",
+        "textEn": "Quran",
+        "phonetic": "قُرْآن",
+        "difficulty": 2,
+        "description": "كتاب الله"
+      },
+      {
+        "id": "islamic_5",
+        "text": "وضوء",
+        "textEn": "Ablution",
+        "phonetic": "وُضُوء",
+        "difficulty": 2,
+        "description": "الطهارة للصلاة"
+      }
+    ]
+  }
+}

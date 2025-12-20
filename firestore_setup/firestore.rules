@@ -1,0 +1,148 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isTrainer() {
+      return isAuthenticated() && getUserData().role == 'trainer';
+    }
+    
+    function isParent() {
+      return isAuthenticated() && getUserData().role == 'parent';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ============================================
+    // Users Collection
+    // ============================================
+    match /users/{userId} {
+      // Anyone authenticated can read users (for getting trainer/parent info)
+      allow read: if isAuthenticated();
+      
+      // Users can only create their own document
+      allow create: if isOwner(userId);
+      
+      // Users can only update their own document
+      allow update: if isOwner(userId);
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Children Collection
+    // ============================================
+    match /children/{childId} {
+      // Trainers can read children assigned to them
+      // Parents can read their own children
+      // Admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.trainerId == request.auth.uid ||
+        resource.data.parentId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Trainers and admins can create children
+      allow create: if isTrainer() || isAdmin();
+      
+      // Trainers can update their assigned children
+      allow update: if (isTrainer() && resource.data.trainerId == request.auth.uid) || isAdmin();
+      
+      // Only admins can delete (soft delete preferred)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Categories Collection
+    // ============================================
+    match /categories/{categoryId} {
+      // All authenticated users can read categories
+      allow read: if isAuthenticated();
+      
+      // Trainers and admins can manage categories
+      allow create: if isTrainer() || isAdmin();
+      allow update: if isTrainer() || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Words Collection
+    // ============================================
+    match /words/{wordId} {
+      // All authenticated users can read words
+      allow read: if isAuthenticated();
+      
+      // Trainers and admins can manage words
+      allow create: if isTrainer() || isAdmin();
+      allow update: if isTrainer() || isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Recordings Collection
+    // ============================================
+    match /recordings/{recordingId} {
+      // Trainers can read recordings of their children
+      // Parents can read recordings of their children
+      allow read: if isAuthenticated() && (
+        isTrainer() || 
+        isParent() ||
+        isAdmin()
+      );
+      
+      // Trainers can create recordings
+      allow create: if isTrainer() || isAdmin();
+      
+      // Trainers can update (for adding evaluations)
+      allow update: if isTrainer() || isAdmin();
+      
+      // Only admins can delete
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Reports Collection
+    // ============================================
+    match /reports/{reportId} {
+      // Trainers and parents can read reports
+      allow read: if isAuthenticated();
+      
+      // Trainers can create reports
+      allow create: if isTrainer() || isAdmin();
+      
+      // Trainers can update reports
+      allow update: if isTrainer() || isAdmin();
+      
+      // Only admins can delete
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================
+    // Evaluations Collection (if separate)
+    // ============================================
+    match /evaluations/{evaluationId} {
+      allow read: if isAuthenticated();
+      allow create: if isTrainer() || isAdmin();
+      allow update: if isTrainer() || isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
