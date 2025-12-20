@@ -1,0 +1,21 @@
+{
+  "name": "speech-therapy-functions",
+  "description": "Firebase Cloud Functions for Speech Therapy App",
+  "version": "1.0.0",
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.0",
+    "firebase-functions": "^4.5.0",
+    "node-fetch": "^2.7.0",
+    "form-data": "^4.0.0",
+    "busboy": "^1.6.0",
+    "cors": "^2.8.5"
+  }
+}

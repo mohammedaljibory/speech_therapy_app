@@ -63,14 +63,9 @@ class AIEvaluationResult {
 }
 
 /// Claude API Service for intelligent speech evaluation
+/// Uses Firebase Functions on Web to avoid CORS issues
 class ClaudeEvaluationService {
   /// Evaluate a child's pronunciation using Claude AI
-  ///
-  /// [expectedWord] - The word the child was supposed to say
-  /// [transcription] - What the child actually said (from Whisper)
-  /// [childName] - Name of the child for personalized feedback
-  /// [childAge] - Age of the child to adjust feedback
-  /// [childLevel] - Proficiency level (مبتدئ، متوسط، متقدم)
   Future<AIEvaluationResult> evaluate({
     required String expectedWord,
     required String? transcription,
@@ -78,10 +73,6 @@ class ClaudeEvaluationService {
     required int childAge,
     required String childLevel,
   }) async {
-    if (!ApiConfig.isClaudeConfigured) {
-      return AIEvaluationResult.error('Claude API key not configured');
-    }
-
     if (transcription == null || transcription.trim().isEmpty) {
       return AIEvaluationResult(
         success: true,
@@ -92,9 +83,89 @@ class ClaudeEvaluationService {
         mos: 1,
         overallScore: 0,
         level: 'لم يتم التعرف على الكلام',
-        feedback: 'لم نتمكن من سماع ما قاله $childName. دعه يحاول مرة أخرى بصوت أوضح.',
-        encouragement: 'لا بأس! المحاولة هي الخطوة الأولى نحو النجاح. هيا نحاول مرة أخرى!',
+        feedback:
+            'لم نتمكن من سماع ما قاله $childName. دعه يحاول مرة أخرى بصوت أوضح.',
+        encouragement:
+            'لا بأس! المحاولة هي الخطوة الأولى نحو النجاح. هيا نحاول مرة أخرى!',
       );
+    }
+
+    if (kIsWeb) {
+      return _evaluateViaFirebase(
+        expectedWord: expectedWord,
+        transcription: transcription,
+        childName: childName,
+        childAge: childAge,
+        childLevel: childLevel,
+      );
+    } else {
+      return _evaluateDirect(
+        expectedWord: expectedWord,
+        transcription: transcription,
+        childName: childName,
+        childAge: childAge,
+        childLevel: childLevel,
+      );
+    }
+  }
+
+  /// Evaluate via Firebase Functions (for Web)
+  Future<AIEvaluationResult> _evaluateViaFirebase({
+    required String expectedWord,
+    required String transcription,
+    required String childName,
+    required int childAge,
+    required String childLevel,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.claudeFunctionUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'expectedWord': expectedWord,
+          'transcription': transcription,
+          'childName': childName,
+          'childAge': childAge,
+          'childLevel': childLevel,
+        }),
+      ).timeout(
+        const Duration(seconds: 30),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return AIEvaluationResult.fromJson(data);
+        } else {
+          return AIEvaluationResult.error(
+              data['error'] ?? 'Unknown error from Firebase Function');
+        }
+      } else {
+        try {
+          final errorData = json.decode(response.body);
+          return AIEvaluationResult.error(
+              errorData['error'] ?? 'HTTP ${response.statusCode}');
+        } catch (_) {
+          return AIEvaluationResult.error(
+              'HTTP ${response.statusCode}: ${response.body}');
+        }
+      }
+    } catch (e) {
+      debugPrint('Claude evaluation error (Firebase): $e');
+      return AIEvaluationResult.error(e.toString());
+    }
+  }
+
+  /// Evaluate directly via Claude API (for Mobile/Desktop)
+  Future<AIEvaluationResult> _evaluateDirect({
+    required String expectedWord,
+    required String transcription,
+    required String childName,
+    required int childAge,
+    required String childLevel,
+  }) async {
+    if (!ApiConfig.isClaudeConfigured) {
+      return AIEvaluationResult.error('Claude API key not configured');
     }
 
     try {
@@ -107,7 +178,7 @@ class ClaudeEvaluationService {
       );
 
       final response = await http.post(
-        Uri.parse(ApiConfig.claudeEndpoint),
+        Uri.parse(ApiConfig.claudeDirectUrl),
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': ApiConfig.claudeApiKey,
@@ -117,17 +188,11 @@ class ClaudeEvaluationService {
           'model': ApiConfig.claudeModel,
           'max_tokens': 1024,
           'messages': [
-            {
-              'role': 'user',
-              'content': prompt,
-            }
+            {'role': 'user', 'content': prompt}
           ],
         }),
       ).timeout(
         const Duration(seconds: 30),
-        onTimeout: () {
-          throw Exception('Request timeout');
-        },
       );
 
       if (response.statusCode == 200) {
@@ -199,10 +264,9 @@ class ClaudeEvaluationService {
 
   AIEvaluationResult _parseEvaluationResponse(String response) {
     try {
-      // Try to extract JSON from the response
       String jsonStr = response.trim();
 
-      // Remove any markdown code blocks if present
+      // Remove markdown code blocks if present
       if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replaceAll(RegExp(r'^```json?\n?'), '');
         jsonStr = jsonStr.replaceAll(RegExp(r'\n?```$'), '');
@@ -220,7 +284,6 @@ class ClaudeEvaluationService {
       debugPrint('Error parsing Claude response: $e');
       debugPrint('Response was: $response');
 
-      // Return a fallback result if parsing fails
       return AIEvaluationResult(
         success: true,
         accuracy: 50,

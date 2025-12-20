@@ -20,12 +20,42 @@ class TranscriptionResult {
 }
 
 /// OpenAI Whisper Service for Speech-to-Text
+/// Uses Firebase Functions on Web to avoid CORS issues
 class WhisperService {
-  /// Transcribe audio file to text using OpenAI Whisper API
+  /// Transcribe audio file to text
   ///
   /// [audioPath] - Path to the audio file (m4a, mp3, wav, etc.)
   /// [language] - Language code (e.g., 'ar' for Arabic)
   Future<TranscriptionResult> transcribe({
+    required String audioPath,
+    String language = 'ar',
+  }) async {
+    if (kIsWeb) {
+      return _transcribeViaFirebase(audioPath: audioPath, language: language);
+    } else {
+      return _transcribeDirect(audioPath: audioPath, language: language);
+    }
+  }
+
+  /// Transcribe via Firebase Functions (for Web)
+  Future<TranscriptionResult> _transcribeViaFirebase({
+    required String audioPath,
+    String language = 'ar',
+  }) async {
+    try {
+      // For web, we need to send the audio bytes
+      // This will be called with bytes from the recording
+      return TranscriptionResult(
+        success: false,
+        error: 'Use transcribeBytes for web platform',
+      );
+    } catch (e) {
+      return TranscriptionResult(success: false, error: e.toString());
+    }
+  }
+
+  /// Transcribe directly to OpenAI (for Mobile/Desktop)
+  Future<TranscriptionResult> _transcribeDirect({
     required String audioPath,
     String language = 'ar',
   }) async {
@@ -37,49 +67,29 @@ class WhisperService {
     }
 
     try {
-      // Create multipart request
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse(ApiConfig.whisperEndpoint),
+        Uri.parse(ApiConfig.whisperDirectUrl),
       );
 
-      // Add headers
       request.headers['Authorization'] = 'Bearer ${ApiConfig.openAiApiKey}';
 
-      // Add file
-      if (kIsWeb) {
-        // For web, we need to handle differently
-        // The audio bytes should be passed directly
+      final file = File(audioPath);
+      if (!await file.exists()) {
         return TranscriptionResult(
           success: false,
-          error: 'Web platform requires different handling. Use transcribeBytes instead.',
+          error: 'Audio file not found: $audioPath',
         );
-      } else {
-        final file = File(audioPath);
-        if (!await file.exists()) {
-          return TranscriptionResult(
-            success: false,
-            error: 'Audio file not found: $audioPath',
-          );
-        }
-        request.files.add(await http.MultipartFile.fromPath(
-          'file',
-          audioPath,
-        ));
       }
+      request.files.add(await http.MultipartFile.fromPath('file', audioPath));
 
-      // Add model and language
       request.fields['model'] = ApiConfig.whisperModel;
       request.fields['language'] = language;
       request.fields['response_format'] = 'json';
 
-      // Send request
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 60),
-        onTimeout: () {
-          throw Exception('Request timeout');
-        },
-      );
+            const Duration(seconds: 60),
+          );
 
       final response = await http.Response.fromStream(streamedResponse);
 
@@ -93,40 +103,46 @@ class WhisperService {
         final errorData = json.decode(response.body);
         return TranscriptionResult(
           success: false,
-          error: errorData['error']?['message'] ?? 'Unknown error (${response.statusCode})',
+          error: errorData['error']?['message'] ??
+              'Unknown error (${response.statusCode})',
         );
       }
     } catch (e) {
       debugPrint('Whisper transcription error: $e');
-      return TranscriptionResult(
-        success: false,
-        error: e.toString(),
-      );
+      return TranscriptionResult(success: false, error: e.toString());
     }
   }
 
-  /// Transcribe audio bytes directly (useful for web platform)
+  /// Transcribe audio bytes (works for both Web and Mobile)
   Future<TranscriptionResult> transcribeBytes({
     required List<int> audioBytes,
     required String fileName,
     String language = 'ar',
   }) async {
-    if (!ApiConfig.isOpenAiConfigured) {
-      return TranscriptionResult(
-        success: false,
-        error: 'OpenAI API key not configured',
-      );
-    }
-
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(ApiConfig.whisperEndpoint),
-      );
+      final Uri url;
+      final Map<String, String> headers;
 
-      request.headers['Authorization'] = 'Bearer ${ApiConfig.openAiApiKey}';
+      if (kIsWeb) {
+        // Use Firebase Functions for Web
+        url = Uri.parse(ApiConfig.whisperFunctionUrl);
+        headers = {};
+      } else {
+        // Direct API call for Mobile/Desktop
+        if (!ApiConfig.isOpenAiConfigured) {
+          return TranscriptionResult(
+            success: false,
+            error: 'OpenAI API key not configured',
+          );
+        }
+        url = Uri.parse(ApiConfig.whisperDirectUrl);
+        headers = {'Authorization': 'Bearer ${ApiConfig.openAiApiKey}'};
+      }
 
-      // Add audio bytes as file
+      final request = http.MultipartRequest('POST', url);
+      request.headers.addAll(headers);
+
+      // Add audio file
       request.files.add(http.MultipartFile.fromBytes(
         'file',
         audioBytes,
@@ -138,30 +154,35 @@ class WhisperService {
       request.fields['response_format'] = 'json';
 
       final streamedResponse = await request.send().timeout(
-        const Duration(seconds: 60),
-      );
+            const Duration(seconds: 60),
+          );
 
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return TranscriptionResult(
-          success: true,
+          success: data['success'] ?? true,
           text: data['text']?.toString().trim(),
+          error: data['error'],
         );
       } else {
-        final errorData = json.decode(response.body);
-        return TranscriptionResult(
-          success: false,
-          error: errorData['error']?['message'] ?? 'Unknown error (${response.statusCode})',
-        );
+        try {
+          final errorData = json.decode(response.body);
+          return TranscriptionResult(
+            success: false,
+            error: errorData['error'] ?? 'Unknown error (${response.statusCode})',
+          );
+        } catch (_) {
+          return TranscriptionResult(
+            success: false,
+            error: 'HTTP ${response.statusCode}: ${response.body}',
+          );
+        }
       }
     } catch (e) {
       debugPrint('Whisper transcription error: $e');
-      return TranscriptionResult(
-        success: false,
-        error: e.toString(),
-      );
+      return TranscriptionResult(success: false, error: e.toString());
     }
   }
 }

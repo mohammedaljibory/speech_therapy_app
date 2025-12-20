@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
@@ -45,6 +46,7 @@ class _RecordingScreenState extends State<RecordingScreen>
   Timer? _recordingTimer;
   ChildModel? _selectedChild;
   String? _recordingPath;
+  Uint8List? _recordingBytes;
   String? _transcription;
   String? _error;
 
@@ -71,7 +73,9 @@ class _RecordingScreenState extends State<RecordingScreen>
   Future<void> _loadChildren() async {
     final authProvider = context.read<AuthProvider>();
     if (authProvider.userId != null) {
-      await context.read<ChildrenProvider>().loadChildren(authProvider.userId!);
+      await context
+          .read<ChildrenProvider>()
+          .loadChildren(authProvider.userId!);
       final children = context.read<ChildrenProvider>().children;
       if (children.length == 1) {
         setState(() => _selectedChild = children.first);
@@ -129,29 +133,29 @@ class _RecordingScreenState extends State<RecordingScreen>
       _hasRecording = false;
       _transcription = null;
       _error = null;
+      _recordingBytes = null;
     });
 
     try {
-      // Get temporary directory for storing recording
+      // Get path for storing recording
       String path;
       if (kIsWeb) {
-        // Web doesn't support path_provider the same way
-        path = 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        path = 'recording_${DateTime.now().millisecondsSinceEpoch}.webm';
       } else {
         final directory = await getTemporaryDirectory();
-        path = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        path =
+            '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
       }
 
-      // Start recording
-      await _audioRecorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          sampleRate: 44100,
-          bitRate: 128000,
-        ),
-        path: path,
+      // Configure recording
+      final config = RecordConfig(
+        encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
+        sampleRate: 16000, // Whisper works well with 16kHz
+        bitRate: 128000,
       );
 
+      // Start recording
+      await _audioRecorder.start(config, path: path);
       _recordingPath = path;
 
       // Start timer
@@ -173,33 +177,82 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     try {
       final path = await _audioRecorder.stop();
+
+      if (path == null) {
+        setState(() {
+          _isRecording = false;
+          _error = 'فشل في حفظ التسجيل';
+        });
+        return;
+      }
+
+      // Read audio bytes for transcription
+      Uint8List? audioBytes;
+      if (kIsWeb) {
+        // On web, the path is a blob URL, we need to fetch it
+        // The record package returns the bytes directly in web
+        try {
+          // For web, read from the blob URL
+          audioBytes = await _readBlobUrl(path);
+        } catch (e) {
+          debugPrint('Error reading web audio: $e');
+        }
+      } else {
+        // On mobile/desktop, read from file
+        final file = File(path);
+        if (await file.exists()) {
+          audioBytes = await file.readAsBytes();
+        }
+      }
+
       setState(() {
         _isRecording = false;
         _hasRecording = true;
         _recordingPath = path;
+        _recordingBytes = audioBytes;
       });
 
-      // Automatically transcribe using Whisper
-      if (ApiConfig.isOpenAiConfigured && path != null) {
-        _transcribeRecording(path);
+      // Automatically transcribe
+      if (audioBytes != null && audioBytes.isNotEmpty) {
+        _transcribeRecording(audioBytes);
       } else {
-        _showSnackBar('تم التسجيل! يرجى تكوين مفتاح OpenAI للنسخ التلقائي', isError: false);
+        _showSnackBar('تم التسجيل! لكن فشل في قراءة الملف الصوتي', isError: true);
       }
     } catch (e) {
       setState(() {
         _isRecording = false;
         _error = e.toString();
       });
-      _showSnackBar('فشل في إيقاف التسجيل', isError: true);
+      _showSnackBar('فشل في إيقاف التسجيل: $e', isError: true);
     }
   }
 
-  Future<void> _transcribeRecording(String path) async {
+  /// Read audio from blob URL (for web)
+  Future<Uint8List?> _readBlobUrl(String blobUrl) async {
+    try {
+      // Use http to fetch the blob
+      final uri = Uri.parse(blobUrl);
+      final response = await HttpClient().getUrl(uri);
+      final httpResponse = await response.close();
+      final bytes = await httpResponse.fold<List<int>>(
+        <int>[],
+        (previous, element) => previous..addAll(element),
+      );
+      return Uint8List.fromList(bytes);
+    } catch (e) {
+      debugPrint('Error reading blob URL: $e');
+      return null;
+    }
+  }
+
+  Future<void> _transcribeRecording(Uint8List audioBytes) async {
     setState(() => _isTranscribing = true);
 
     try {
-      final result = await _whisperService.transcribe(
-        audioPath: path,
+      final fileName = kIsWeb ? 'recording.webm' : 'recording.m4a';
+      final result = await _whisperService.transcribeBytes(
+        audioBytes: audioBytes,
+        fileName: fileName,
         language: 'ar',
       );
 
@@ -210,7 +263,8 @@ class _RecordingScreenState extends State<RecordingScreen>
           _showSnackBar('تم التعرف على: "${result.text}"', isError: false);
         } else {
           _error = result.error;
-          _showSnackBar('فشل في التعرف على الكلام: ${result.error}', isError: true);
+          _showSnackBar(
+              'فشل في التعرف على الكلام: ${result.error}', isError: true);
         }
       });
     } catch (e) {
@@ -228,13 +282,12 @@ class _RecordingScreenState extends State<RecordingScreen>
     try {
       await _audioPlayer.stop();
       if (kIsWeb) {
-        // Web handling would need blob URL
-        _showSnackBar('تشغيل التسجيل غير متاح على الويب حالياً', isError: true);
+        await _audioPlayer.play(UrlSource(_recordingPath!));
       } else {
         await _audioPlayer.play(DeviceFileSource(_recordingPath!));
       }
     } catch (e) {
-      _showSnackBar('فشل في تشغيل التسجيل', isError: true);
+      _showSnackBar('فشل في تشغيل التسجيل: $e', isError: true);
     }
   }
 
@@ -255,7 +308,8 @@ class _RecordingScreenState extends State<RecordingScreen>
       arguments: {
         'word': widget.word,
         'child': _selectedChild,
-        'recordingPath': _recordingPath ?? 'recording_${DateTime.now().millisecondsSinceEpoch}',
+        'recordingPath':
+            _recordingPath ?? 'recording_${DateTime.now().millisecondsSinceEpoch}',
         'categoryName': widget.categoryName,
         'transcription': _transcription,
       },
@@ -328,9 +382,6 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Check API configuration
-    final isApiConfigured = ApiConfig.isOpenAiConfigured;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -360,30 +411,6 @@ class _RecordingScreenState extends State<RecordingScreen>
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              // API Warning Banner
-              if (!isApiConfigured)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.warning_amber, color: Colors.orange.shade700),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'مفاتيح API غير مكونة. يرجى تحديث api_config.dart',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
               // Word Display
               Container(
                 width: 200,
