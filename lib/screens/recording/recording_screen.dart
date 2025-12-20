@@ -1,17 +1,23 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:async';
 
 import '../../config/themes.dart';
 import '../../config/routes.dart';
+import '../../config/api_config.dart';
 import '../../models/word_model.dart';
 import '../../models/child_model.dart';
 import '../../providers/children_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/whisper_service.dart';
 
-/// Recording Screen - For direct recording access
+/// Recording Screen - For recording child's pronunciation with real audio capture
 class RecordingScreen extends StatefulWidget {
   final WordModel word;
   final String categoryName;
@@ -29,13 +35,18 @@ class RecordingScreen extends StatefulWidget {
 class _RecordingScreenState extends State<RecordingScreen>
     with SingleTickerProviderStateMixin {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final TextEditingController _transcriptionController = TextEditingController();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final WhisperService _whisperService = WhisperService();
 
   bool _isRecording = false;
   bool _hasRecording = false;
+  bool _isTranscribing = false;
   int _recordingDuration = 0;
   Timer? _recordingTimer;
   ChildModel? _selectedChild;
+  String? _recordingPath;
+  String? _transcription;
+  String? _error;
 
   late AnimationController _pulseController;
 
@@ -47,6 +58,14 @@ class _RecordingScreenState extends State<RecordingScreen>
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
     _loadChildren();
+    _checkPermissions();
+  }
+
+  Future<void> _checkPermissions() async {
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      _showSnackBar('يرجى منح إذن الميكروفون للتسجيل', isError: true);
+    }
   }
 
   Future<void> _loadChildren() async {
@@ -63,9 +82,9 @@ class _RecordingScreenState extends State<RecordingScreen>
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _audioRecorder.dispose();
     _recordingTimer?.cancel();
     _pulseController.dispose();
-    _transcriptionController.dispose();
     super.dispose();
   }
 
@@ -96,26 +115,127 @@ class _RecordingScreenState extends State<RecordingScreen>
     }
   }
 
-  void _startRecording() {
+  Future<void> _startRecording() async {
+    // Check permissions
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      _showSnackBar('لا يوجد إذن للميكروفون', isError: true);
+      return;
+    }
+
     setState(() {
       _isRecording = true;
       _recordingDuration = 0;
       _hasRecording = false;
+      _transcription = null;
+      _error = null;
     });
 
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() => _recordingDuration++);
-      if (_recordingDuration >= 30) _stopRecording();
-    });
+    try {
+      // Get temporary directory for storing recording
+      String path;
+      if (kIsWeb) {
+        // Web doesn't support path_provider the same way
+        path = 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      } else {
+        final directory = await getTemporaryDirectory();
+        path = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      }
+
+      // Start recording
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 44100,
+          bitRate: 128000,
+        ),
+        path: path,
+      );
+
+      _recordingPath = path;
+
+      // Start timer
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        setState(() => _recordingDuration++);
+        if (_recordingDuration >= 30) _stopRecording();
+      });
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+        _error = e.toString();
+      });
+      _showSnackBar('فشل في بدء التسجيل: $e', isError: true);
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _recordingTimer?.cancel();
-    setState(() {
-      _isRecording = false;
-      _hasRecording = true;
-    });
-    _showSnackBar('تم التسجيل! اكتب ما نطقه الطفل', isError: false);
+
+    try {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+        _hasRecording = true;
+        _recordingPath = path;
+      });
+
+      // Automatically transcribe using Whisper
+      if (ApiConfig.isOpenAiConfigured && path != null) {
+        _transcribeRecording(path);
+      } else {
+        _showSnackBar('تم التسجيل! يرجى تكوين مفتاح OpenAI للنسخ التلقائي', isError: false);
+      }
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+        _error = e.toString();
+      });
+      _showSnackBar('فشل في إيقاف التسجيل', isError: true);
+    }
+  }
+
+  Future<void> _transcribeRecording(String path) async {
+    setState(() => _isTranscribing = true);
+
+    try {
+      final result = await _whisperService.transcribe(
+        audioPath: path,
+        language: 'ar',
+      );
+
+      setState(() {
+        _isTranscribing = false;
+        if (result.success && result.text != null) {
+          _transcription = result.text;
+          _showSnackBar('تم التعرف على: "${result.text}"', isError: false);
+        } else {
+          _error = result.error;
+          _showSnackBar('فشل في التعرف على الكلام: ${result.error}', isError: true);
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isTranscribing = false;
+        _error = e.toString();
+      });
+      _showSnackBar('خطأ في النسخ: $e', isError: true);
+    }
+  }
+
+  Future<void> _playRecording() async {
+    if (_recordingPath == null) return;
+
+    try {
+      await _audioPlayer.stop();
+      if (kIsWeb) {
+        // Web handling would need blob URL
+        _showSnackBar('تشغيل التسجيل غير متاح على الويب حالياً', isError: true);
+      } else {
+        await _audioPlayer.play(DeviceFileSource(_recordingPath!));
+      }
+    } catch (e) {
+      _showSnackBar('فشل في تشغيل التسجيل', isError: true);
+    }
   }
 
   void _submitForEvaluation() {
@@ -124,9 +244,8 @@ class _RecordingScreenState extends State<RecordingScreen>
       return;
     }
 
-    final transcription = _transcriptionController.text.trim();
-    if (transcription.isEmpty) {
-      _showSnackBar('الرجاء كتابة ما نطقه الطفل', isError: true);
+    if (!_hasRecording) {
+      _showSnackBar('الرجاء تسجيل الصوت أولاً', isError: true);
       return;
     }
 
@@ -136,9 +255,9 @@ class _RecordingScreenState extends State<RecordingScreen>
       arguments: {
         'word': widget.word,
         'child': _selectedChild,
-        'recordingPath': 'recording_${DateTime.now().millisecondsSinceEpoch}',
+        'recordingPath': _recordingPath ?? 'recording_${DateTime.now().millisecondsSinceEpoch}',
         'categoryName': widget.categoryName,
-        'transcription': transcription,
+        'transcription': _transcription,
       },
     );
   }
@@ -209,6 +328,9 @@ class _RecordingScreenState extends State<RecordingScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Check API configuration
+    final isApiConfigured = ApiConfig.isOpenAiConfigured;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -238,6 +360,30 @@ class _RecordingScreenState extends State<RecordingScreen>
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
+              // API Warning Banner
+              if (!isApiConfigured)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'مفاتيح API غير مكونة. يرجى تحديث api_config.dart',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Word Display
               Container(
                 width: 200,
@@ -302,16 +448,29 @@ class _RecordingScreenState extends State<RecordingScreen>
                   ),
                 ).animate().fadeIn(),
 
+              // Transcribing indicator
+              if (_isTranscribing)
+                Column(
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 8),
+                    Text(
+                      'جاري التعرف على الكلام...',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+
               const SizedBox(height: 16),
 
               // Record Button
               GestureDetector(
-                onTap: _toggleRecording,
+                onTap: _isTranscribing ? null : _toggleRecording,
                 child: AnimatedBuilder(
                   animation: _pulseController,
                   builder: (context, child) {
                     return Transform.scale(
-                      scale: _isRecording 
+                      scale: _isRecording
                           ? 1.0 + (_pulseController.value * 0.2)
                           : 1.0,
                       child: Container(
@@ -319,14 +478,17 @@ class _RecordingScreenState extends State<RecordingScreen>
                         height: 100,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _isRecording 
-                              ? AppColors.error 
-                              : AppColors.primaryGreen,
+                          color: _isRecording
+                              ? AppColors.error
+                              : _isTranscribing
+                                  ? Colors.grey
+                                  : AppColors.primaryGreen,
                           boxShadow: [
                             BoxShadow(
-                              color: (_isRecording 
-                                  ? AppColors.error 
-                                  : AppColors.primaryGreen).withOpacity(0.4),
+                              color: (_isRecording
+                                      ? AppColors.error
+                                      : AppColors.primaryGreen)
+                                  .withOpacity(0.4),
                               blurRadius: 20,
                               spreadRadius: _isRecording ? 5 : 0,
                             ),
@@ -346,60 +508,123 @@ class _RecordingScreenState extends State<RecordingScreen>
               const SizedBox(height: 16),
 
               Text(
-                _isRecording 
-                    ? 'اضغط للإيقاف' 
-                    : _hasRecording 
-                        ? 'تم التسجيل ✓' 
-                        : 'اضغط للتسجيل',
+                _isRecording
+                    ? 'اضغط للإيقاف'
+                    : _isTranscribing
+                        ? 'جاري المعالجة...'
+                        : _hasRecording
+                            ? 'تم التسجيل ✓'
+                            : 'اضغط للتسجيل',
                 style: TextStyle(
-                  color: _hasRecording 
-                      ? AppColors.primaryGreen 
+                  color: _hasRecording
+                      ? AppColors.primaryGreen
                       : AppColors.textSecondary,
-                  fontWeight: _hasRecording ? FontWeight.bold : FontWeight.normal,
+                  fontWeight:
+                      _hasRecording ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
 
-              // Transcription Input
-              if (_hasRecording) ...[
+              // Recording Results
+              if (_hasRecording && !_isTranscribing) ...[
                 const SizedBox(height: 24),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Play recording button
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _playRecording,
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('استمع للتسجيل'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: _toggleRecording,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('إعادة'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.primaryOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 16),
+
+                      // Transcription result
                       const Text(
-                        'ماذا نطق الطفل؟',
+                        'ما تم التعرف عليه:',
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: _transcriptionController,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        decoration: InputDecoration(
-                          hintText: widget.word.text,
-                          hintStyle: TextStyle(color: Colors.grey.shade300),
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: _transcription != null
+                              ? AppColors.primaryGreen.withOpacity(0.1)
+                              : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _transcription ?? 'لم يتم التعرف على الكلام',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: _transcription != null
+                                ? AppColors.primaryGreen
+                                : Colors.grey,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Center(
-                        child: TextButton(
-                          onPressed: () {
-                            _transcriptionController.text = widget.word.text;
-                          },
-                          child: const Text('نطق صحيح ✓', style: TextStyle(color: AppColors.primaryGreen)),
+
+                      // Comparison
+                      if (_transcription != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'المطلوب: ',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                            Text(
+                              widget.word.text,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              _transcription == widget.word.text
+                                  ? Icons.check_circle
+                                  : Icons.compare_arrows,
+                              color: _transcription == widget.word.text
+                                  ? AppColors.primaryGreen
+                                  : AppColors.primaryOrange,
+                            ),
+                          ],
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -411,8 +636,8 @@ class _RecordingScreenState extends State<RecordingScreen>
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _submitForEvaluation,
-                    icon: const Icon(Icons.send),
-                    label: const Text('إرسال للتقييم'),
+                    icon: const Icon(Icons.psychology),
+                    label: const Text('تقييم بالذكاء الاصطناعي'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryPurple,
                       foregroundColor: Colors.white,

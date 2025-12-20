@@ -26,8 +26,11 @@ dependencies:
   firebase_storage: ^12.4.0
   
   # Audio Recording & Playing
- # record: ^5.1.2
+  record: ^5.1.2
   audioplayers: ^6.1.0
+
+  # HTTP for API calls
+  http: ^1.2.0
 
 
   timezone: ^0.9.2
