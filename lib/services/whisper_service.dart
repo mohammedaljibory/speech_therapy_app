@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -30,87 +29,19 @@ class WhisperService {
     required String audioPath,
     String language = 'ar',
   }) async {
+    // On web, use transcribeBytes instead
     if (kIsWeb) {
-      return _transcribeViaFirebase(audioPath: audioPath, language: language);
-    } else {
-      return _transcribeDirect(audioPath: audioPath, language: language);
-    }
-  }
-
-  /// Transcribe via Firebase Functions (for Web)
-  Future<TranscriptionResult> _transcribeViaFirebase({
-    required String audioPath,
-    String language = 'ar',
-  }) async {
-    try {
-      // For web, we need to send the audio bytes
-      // This will be called with bytes from the recording
       return TranscriptionResult(
         success: false,
         error: 'Use transcribeBytes for web platform',
       );
-    } catch (e) {
-      return TranscriptionResult(success: false, error: e.toString());
-    }
-  }
-
-  /// Transcribe directly to OpenAI (for Mobile/Desktop)
-  Future<TranscriptionResult> _transcribeDirect({
-    required String audioPath,
-    String language = 'ar',
-  }) async {
-    if (!ApiConfig.isOpenAiConfigured) {
-      return TranscriptionResult(
-        success: false,
-        error: 'OpenAI API key not configured',
-      );
     }
 
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(ApiConfig.whisperDirectUrl),
-      );
-
-      request.headers['Authorization'] = 'Bearer ${ApiConfig.openAiApiKey}';
-
-      final file = File(audioPath);
-      if (!await file.exists()) {
-        return TranscriptionResult(
-          success: false,
-          error: 'Audio file not found: $audioPath',
-        );
-      }
-      request.files.add(await http.MultipartFile.fromPath('file', audioPath));
-
-      request.fields['model'] = ApiConfig.whisperModel;
-      request.fields['language'] = language;
-      request.fields['response_format'] = 'json';
-
-      final streamedResponse = await request.send().timeout(
-            const Duration(seconds: 60),
-          );
-
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return TranscriptionResult(
-          success: true,
-          text: data['text']?.toString().trim(),
-        );
-      } else {
-        final errorData = json.decode(response.body);
-        return TranscriptionResult(
-          success: false,
-          error: errorData['error']?['message'] ??
-              'Unknown error (${response.statusCode})',
-        );
-      }
-    } catch (e) {
-      debugPrint('Whisper transcription error: $e');
-      return TranscriptionResult(success: false, error: e.toString());
-    }
+    // For mobile/desktop, this method requires platform-specific implementation
+    return TranscriptionResult(
+      success: false,
+      error: 'Use transcribeBytes method instead',
+    );
   }
 
   /// Transcribe audio bytes (works for both Web and Mobile)
@@ -164,14 +95,14 @@ class WhisperService {
         return TranscriptionResult(
           success: data['success'] ?? true,
           text: data['text']?.toString().trim(),
-          error: data['error'],
+          error: data['error']?.toString(),
         );
       } else {
         try {
           final errorData = json.decode(response.body);
           return TranscriptionResult(
             success: false,
-            error: errorData['error'] ?? 'Unknown error (${response.statusCode})',
+            error: errorData['error']?.toString() ?? 'Unknown error (${response.statusCode})',
           );
         } catch (_) {
           return TranscriptionResult(

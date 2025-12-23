@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,12 +5,15 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import 'dart:async';
+
+// Conditional imports for platform-specific code
+import 'recording_screen_stub.dart'
+    if (dart.library.io) 'recording_screen_io.dart' as platform;
 
 import '../../config/themes.dart';
 import '../../config/routes.dart';
-import '../../config/api_config.dart';
 import '../../models/word_model.dart';
 import '../../models/child_model.dart';
 import '../../providers/children_provider.dart';
@@ -138,13 +140,12 @@ class _RecordingScreenState extends State<RecordingScreen>
 
     try {
       // Get path for storing recording
+      final filename = 'recording_${DateTime.now().millisecondsSinceEpoch}';
       String path;
       if (kIsWeb) {
-        path = 'recording_${DateTime.now().millisecondsSinceEpoch}.webm';
+        path = '$filename.webm';
       } else {
-        final directory = await getTemporaryDirectory();
-        path =
-            '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        path = await platform.getRecordingPath('$filename.m4a');
       }
 
       // Configure recording
@@ -189,20 +190,18 @@ class _RecordingScreenState extends State<RecordingScreen>
       // Read audio bytes for transcription
       Uint8List? audioBytes;
       if (kIsWeb) {
-        // On web, the path is a blob URL, we need to fetch it
-        // The record package returns the bytes directly in web
+        // On web, fetch the blob URL using http package
         try {
-          // For web, read from the blob URL
-          audioBytes = await _readBlobUrl(path);
+          final response = await http.get(Uri.parse(path));
+          if (response.statusCode == 200) {
+            audioBytes = response.bodyBytes;
+          }
         } catch (e) {
           debugPrint('Error reading web audio: $e');
         }
       } else {
-        // On mobile/desktop, read from file
-        final file = File(path);
-        if (await file.exists()) {
-          audioBytes = await file.readAsBytes();
-        }
+        // On mobile/desktop, read from file using platform-specific code
+        audioBytes = await platform.readFileBytes(path);
       }
 
       setState(() {
@@ -224,24 +223,6 @@ class _RecordingScreenState extends State<RecordingScreen>
         _error = e.toString();
       });
       _showSnackBar('فشل في إيقاف التسجيل: $e', isError: true);
-    }
-  }
-
-  /// Read audio from blob URL (for web)
-  Future<Uint8List?> _readBlobUrl(String blobUrl) async {
-    try {
-      // Use http to fetch the blob
-      final uri = Uri.parse(blobUrl);
-      final response = await HttpClient().getUrl(uri);
-      final httpResponse = await response.close();
-      final bytes = await httpResponse.fold<List<int>>(
-        <int>[],
-        (previous, element) => previous..addAll(element),
-      );
-      return Uint8List.fromList(bytes);
-    } catch (e) {
-      debugPrint('Error reading blob URL: $e');
-      return null;
     }
   }
 
