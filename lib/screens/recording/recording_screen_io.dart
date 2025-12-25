@@ -18,8 +18,8 @@ Future<Uint8List?> readFileBytes(String path) async {
   return null;
 }
 
-/// Read bytes from blob URL (not used on mobile/desktop)
+/// Read bytes from blob URL (only used on web, not applicable for mobile/desktop)
 Future<Uint8List?> readBlobUrl(String blobUrl) async {
-  // Not applicable for mobile/desktop
+  // Blob URLs are web-only, this method is not used on mobile/desktop
   return null;
 }

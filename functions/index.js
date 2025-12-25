@@ -59,11 +59,25 @@ exports.whisperTranscribe = functions.https.onRequest((req, res) => {
         return res.status(400).json({ error: 'No audio file provided' });
       }
 
+      // Determine content type based on file extension
+      let contentType = 'audio/m4a';
+      if (audioFilename.endsWith('.webm')) {
+        contentType = 'audio/webm';
+      } else if (audioFilename.endsWith('.mp3')) {
+        contentType = 'audio/mpeg';
+      } else if (audioFilename.endsWith('.wav')) {
+        contentType = 'audio/wav';
+      } else if (audioFilename.endsWith('.ogg')) {
+        contentType = 'audio/ogg';
+      }
+
+      console.log(`Processing audio file: ${audioFilename}, size: ${audioBuffer.length} bytes, type: ${contentType}`);
+
       // Create form data for OpenAI
       const formData = new FormData();
       formData.append('file', audioBuffer, {
         filename: audioFilename,
-        contentType: 'audio/m4a',
+        contentType: contentType,
       });
       formData.append('model', 'whisper-1');
       formData.append('language', language);

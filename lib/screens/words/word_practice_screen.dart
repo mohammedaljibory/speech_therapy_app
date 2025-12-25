@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:record/record.dart';
-import 'package:http/http.dart' as http;
 import 'dart:async';
 
 import '../../config/themes.dart';
@@ -15,8 +14,8 @@ import '../../models/child_model.dart';
 import '../../providers/children_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/whisper_service.dart';
-import '../recording/recording_screen_stub.dart'
-    if (dart.library.io) '../recording/recording_screen_io.dart' as platform;
+import '../recording/recording_screen_io.dart'
+    if (dart.library.html) '../recording/recording_screen_web.dart' as platform;
 
 class WordPracticeScreen extends StatefulWidget {
   final WordModel word;
@@ -191,14 +190,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
       // Read audio bytes
       Uint8List? audioBytes;
       if (kIsWeb) {
-        try {
-          final response = await http.get(Uri.parse(path));
-          if (response.statusCode == 200) {
-            audioBytes = response.bodyBytes;
-          }
-        } catch (e) {
-          debugPrint('Error reading web audio: $e');
-        }
+        // On web, use platform-specific blob URL reader
+        audioBytes = await platform.readBlobUrl(path);
+        debugPrint('Web audio bytes: ${audioBytes?.length ?? 0} bytes');
       } else {
         audioBytes = await platform.readFileBytes(path);
       }
