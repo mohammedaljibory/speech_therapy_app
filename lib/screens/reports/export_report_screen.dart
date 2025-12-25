@@ -45,7 +45,7 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
       final childrenProvider = context.read<ChildrenProvider>();
       final evaluationProvider = context.read<EvaluationProvider>();
 
-      _child = childrenProvider.getChild(widget.childId);
+      _child = await childrenProvider.getChild(widget.childId);
 
       // Check if there's an existing report or generate a new one
       await evaluationProvider.loadReports(widget.childId);
