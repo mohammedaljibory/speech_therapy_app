@@ -73,10 +73,195 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       ),
       floatingActionButton: GradientFAB(
         icon: Icons.add,
-        onPressed: () {
-          // TODO: Add category
-        },
+        onPressed: () => _showAddCategoryDialog(),
         gradient: AppColors.gradientPurple,
+      ),
+    );
+  }
+
+  void _showAddCategoryDialog() {
+    final nameController = TextEditingController();
+    final nameEnController = TextEditingController();
+    String selectedIcon = 'category';
+    int selectedColor = AppColors.primaryBlue.value;
+
+    final icons = [
+      ('category', Icons.category),
+      ('pets', Icons.pets),
+      ('home', Icons.home),
+      ('directions_car', Icons.directions_car),
+      ('restaurant', Icons.restaurant),
+      ('sports_soccer', Icons.sports_soccer),
+      ('school', Icons.school),
+      ('favorite', Icons.favorite),
+      ('star', Icons.star),
+      ('music_note', Icons.music_note),
+      ('nature', Icons.nature),
+      ('face', Icons.face),
+    ];
+
+    final colors = [
+      AppColors.primaryBlue.value,
+      AppColors.primaryPink.value,
+      AppColors.primaryOrange.value,
+      AppColors.primaryPurple.value,
+      Colors.green.value,
+      Colors.red.value,
+      Colors.teal.value,
+      Colors.amber.value,
+    ];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'إضافة قسم جديد',
+            textAlign: TextAlign.center,
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: 'اسم القسم بالعربية',
+                    hintText: 'مثال: الحيوانات',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameEnController,
+                  decoration: InputDecoration(
+                    labelText: 'اسم القسم بالإنجليزية',
+                    hintText: 'Example: Animals',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text('اختر الأيقونة:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: icons.map((iconData) {
+                    final isSelected = selectedIcon == iconData.$1;
+                    return InkWell(
+                      onTap: () {
+                        setDialogState(() => selectedIcon = iconData.$1);
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isSelected ? Color(selectedColor).withOpacity(0.2) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected ? Border.all(color: Color(selectedColor), width: 2) : null,
+                        ),
+                        child: Icon(
+                          iconData.$2,
+                          color: isSelected ? Color(selectedColor) : Colors.grey,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                const Text('اختر اللون:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: colors.map((colorValue) {
+                    final isSelected = selectedColor == colorValue;
+                    return InkWell(
+                      onTap: () {
+                        setDialogState(() => selectedColor = colorValue);
+                      },
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(colorValue),
+                          shape: BoxShape.circle,
+                          border: isSelected ? Border.all(color: Colors.black, width: 3) : null,
+                        ),
+                        child: isSelected
+                            ? const Icon(Icons.check, color: Colors.white, size: 20)
+                            : null,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
+            ),
+            Consumer<CategoriesProvider>(
+              builder: (context, provider, _) => ElevatedButton(
+                onPressed: provider.isLoading
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('يرجى إدخال اسم القسم')),
+                          );
+                          return;
+                        }
+                        final result = await provider.addCategory(
+                          name: nameController.text.trim(),
+                          nameEn: nameEnController.text.trim().isNotEmpty
+                              ? nameEnController.text.trim()
+                              : nameController.text.trim(),
+                          icon: selectedIcon,
+                          colorValue: selectedColor,
+                        );
+                        if (result != null && ctx.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم إضافة القسم بنجاح'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(selectedColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: provider.isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : const Text('إضافة', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
