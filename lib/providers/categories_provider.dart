@@ -491,6 +491,24 @@ class CategoriesProvider with ChangeNotifier {
     return _words.where((w) => w.categoryId == categoryId).toList();
   }
 
+  /// Get word by ID
+  WordModel? getWordById(String wordId) {
+    try {
+      return _words.firstWhere((w) => w.id == wordId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get category by ID
+  CategoryModel? getCategoryById(String categoryId) {
+    try {
+      return _categories.firstWhere((c) => c.id == categoryId);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Get total words count
   int get totalWordsCount => _words.length;
 
