@@ -2,7 +2,6 @@ const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
-const Busboy = require('busboy');
 const cors = require('cors')({ origin: true });
 
 admin.initializeApp();
@@ -14,7 +13,7 @@ const getClaudeKey = () => functions.config().claude?.key || process.env.CLAUDE_
 
 /**
  * Whisper Speech-to-Text Proxy
- * Receives audio file and returns transcription
+ * Receives audio as base64 JSON and returns transcription
  */
 exports.whisperTranscribe = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -28,36 +27,16 @@ exports.whisperTranscribe = functions.https.onRequest((req, res) => {
     }
 
     try {
-      // Parse multipart form data
-      const busboy = Busboy({ headers: req.headers });
-      let audioBuffer = null;
-      let audioFilename = 'audio.m4a';
-      let language = 'ar';
+      // Parse JSON body with base64 audio
+      const { audio, fileName, language = 'ar' } = req.body;
 
-      const parsePromise = new Promise((resolve, reject) => {
-        busboy.on('file', (fieldname, file, info) => {
-          const chunks = [];
-          audioFilename = info.filename || audioFilename;
-          file.on('data', (chunk) => chunks.push(chunk));
-          file.on('end', () => {
-            audioBuffer = Buffer.concat(chunks);
-          });
-        });
-
-        busboy.on('field', (fieldname, val) => {
-          if (fieldname === 'language') language = val;
-        });
-
-        busboy.on('finish', resolve);
-        busboy.on('error', reject);
-      });
-
-      req.pipe(busboy);
-      await parsePromise;
-
-      if (!audioBuffer) {
-        return res.status(400).json({ error: 'No audio file provided' });
+      if (!audio) {
+        return res.status(400).json({ error: 'No audio data provided' });
       }
+
+      // Decode base64 audio
+      const audioBuffer = Buffer.from(audio, 'base64');
+      const audioFilename = fileName || 'audio.webm';
 
       // Determine content type based on file extension
       let contentType = 'audio/m4a';
