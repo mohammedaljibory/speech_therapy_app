@@ -1,9 +1,11 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:record/record.dart';
+import 'package:http/http.dart' as http;
 import 'dart:async';
 
 import '../../config/themes.dart';
@@ -12,6 +14,9 @@ import '../../models/word_model.dart';
 import '../../models/child_model.dart';
 import '../../providers/children_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/whisper_service.dart';
+import '../recording/recording_screen_stub.dart'
+    if (dart.library.io) '../recording/recording_screen_io.dart' as platform;
 
 class WordPracticeScreen extends StatefulWidget {
   final WordModel word;
@@ -30,14 +35,19 @@ class WordPracticeScreen extends StatefulWidget {
 class _WordPracticeScreenState extends State<WordPracticeScreen>
     with TickerProviderStateMixin {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final TextEditingController _transcriptionController = TextEditingController();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final WhisperService _whisperService = WhisperService();
 
   // State
   bool _isPlayingCorrect = false;
   bool _isRecording = false;
   bool _hasRecording = false;
+  bool _isTranscribing = false;
   bool _isEvaluating = false;
   ChildModel? _selectedChild;
+  String? _recordingPath;
+  Uint8List? _recordingBytes;
+  String? _transcription;
 
   // Recording timer
   int _recordingDuration = 0;
@@ -52,6 +62,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
     super.initState();
     _initAnimation();
     _loadChildren();
+    _checkPermissions();
   }
 
   void _initAnimation() {
@@ -63,6 +74,13 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _pulseController.repeat(reverse: true);
+  }
+
+  Future<void> _checkPermissions() async {
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      _showSnackBar('يرجى منح إذن الميكروفون للتسجيل', isError: true);
+    }
   }
 
   Future<void> _loadChildren() async {
@@ -79,15 +97,15 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _audioRecorder.dispose();
     _recordingTimer?.cancel();
     _pulseController.dispose();
-    _transcriptionController.dispose();
     super.dispose();
   }
 
   Future<void> _playCorrectPronunciation() async {
     if (widget.word.correctPronunciationUrl.isEmpty) {
-      _showSnackBar('لا يوجد ملف صوتي - اكتب ما نطقه الطفل في الحقل أدناه', isError: false);
+      _showSnackBar('لا يوجد ملف صوتي للنطق الصحيح', isError: false);
       return;
     }
 
@@ -106,9 +124,15 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
     }
   }
 
-  void _startRecording() {
+  Future<void> _startRecording() async {
     if (_selectedChild == null) {
       _showSnackBar('الرجاء اختيار الطفل أولاً', isError: true);
+      return;
+    }
+
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      _showSnackBar('لا يوجد إذن للميكروفون', isError: true);
       return;
     }
 
@@ -116,33 +140,139 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
       _isRecording = true;
       _recordingDuration = 0;
       _hasRecording = false;
+      _transcription = null;
+      _recordingBytes = null;
     });
 
-    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() => _recordingDuration++);
-
-      if (_recordingDuration >= 30) {
-        _stopRecording();
+    try {
+      final filename = 'recording_${DateTime.now().millisecondsSinceEpoch}';
+      String path;
+      if (kIsWeb) {
+        path = '$filename.webm';
+      } else {
+        path = await platform.getRecordingPath('$filename.m4a');
       }
-    });
+
+      final config = RecordConfig(
+        encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
+        sampleRate: 16000,
+        bitRate: 128000,
+      );
+
+      await _audioRecorder.start(config, path: path);
+      _recordingPath = path;
+
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        setState(() => _recordingDuration++);
+        if (_recordingDuration >= 30) _stopRecording();
+      });
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+      });
+      _showSnackBar('فشل في بدء التسجيل: $e', isError: true);
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _recordingTimer?.cancel();
 
-    setState(() {
-      _isRecording = false;
-      _hasRecording = true;
-    });
+    try {
+      final path = await _audioRecorder.stop();
 
-    _showSnackBar('تم التسجيل! اكتب ما نطقه الطفل في الحقل أدناه', isError: false);
+      if (path == null) {
+        setState(() {
+          _isRecording = false;
+        });
+        _showSnackBar('فشل في حفظ التسجيل', isError: true);
+        return;
+      }
+
+      // Read audio bytes
+      Uint8List? audioBytes;
+      if (kIsWeb) {
+        try {
+          final response = await http.get(Uri.parse(path));
+          if (response.statusCode == 200) {
+            audioBytes = response.bodyBytes;
+          }
+        } catch (e) {
+          debugPrint('Error reading web audio: $e');
+        }
+      } else {
+        audioBytes = await platform.readFileBytes(path);
+      }
+
+      setState(() {
+        _isRecording = false;
+        _hasRecording = true;
+        _recordingPath = path;
+        _recordingBytes = audioBytes;
+      });
+
+      // Automatically transcribe
+      if (audioBytes != null && audioBytes.isNotEmpty) {
+        _transcribeRecording(audioBytes);
+      } else {
+        _showSnackBar('تم التسجيل! لكن فشل في قراءة الملف', isError: true);
+      }
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+      });
+      _showSnackBar('فشل في إيقاف التسجيل: $e', isError: true);
+    }
+  }
+
+  Future<void> _transcribeRecording(Uint8List audioBytes) async {
+    setState(() => _isTranscribing = true);
+
+    try {
+      final fileName = kIsWeb ? 'recording.webm' : 'recording.m4a';
+      final result = await _whisperService.transcribeBytes(
+        audioBytes: audioBytes,
+        fileName: fileName,
+        language: 'ar',
+      );
+
+      setState(() {
+        _isTranscribing = false;
+        if (result.success && result.text != null) {
+          _transcription = result.text;
+        } else {
+          _showSnackBar('فشل في التعرف: ${result.error}', isError: true);
+        }
+      });
+    } catch (e) {
+      setState(() {
+        _isTranscribing = false;
+      });
+      _showSnackBar('خطأ في النسخ: $e', isError: true);
+    }
+  }
+
+  Future<void> _playRecording() async {
+    if (_recordingPath == null) return;
+
+    try {
+      await _audioPlayer.stop();
+      if (kIsWeb) {
+        await _audioPlayer.play(UrlSource(_recordingPath!));
+      } else {
+        await _audioPlayer.play(DeviceFileSource(_recordingPath!));
+      }
+    } catch (e) {
+      _showSnackBar('فشل في تشغيل التسجيل', isError: true);
+    }
   }
 
   void _deleteRecording() {
     setState(() {
       _hasRecording = false;
       _recordingDuration = 0;
-      _transcriptionController.clear();
+      _transcription = null;
+      _recordingPath = null;
+      _recordingBytes = null;
     });
   }
 
@@ -157,12 +287,6 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
       return;
     }
 
-    final transcription = _transcriptionController.text.trim();
-    if (transcription.isEmpty) {
-      _showSnackBar('الرجاء كتابة ما نطقه الطفل', isError: true);
-      return;
-    }
-
     setState(() => _isEvaluating = true);
 
     try {
@@ -172,9 +296,9 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
         arguments: {
           'word': widget.word,
           'child': _selectedChild,
-          'recordingPath': 'recording_${DateTime.now().millisecondsSinceEpoch}',
+          'recordingPath': _recordingPath ?? 'recording_${DateTime.now().millisecondsSinceEpoch}',
           'categoryName': widget.categoryName,
-          'transcription': transcription,
+          'transcription': _transcription,
         },
       );
     } catch (e) {
@@ -300,8 +424,8 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
                       const SizedBox(height: 32),
                       _buildRecordingSection(),
                       const SizedBox(height: 24),
-                      if (_hasRecording) ...[
-                        _buildTranscriptionInput(),
+                      if (_hasRecording && !_isTranscribing) ...[
+                        _buildTranscriptionResult(),
                         const SizedBox(height: 24),
                         _buildSubmitButton(),
                       ],
@@ -418,37 +542,14 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             child: widget.word.imageUrl.isNotEmpty
-                ? CachedNetworkImage(
-              imageUrl: widget.word.imageUrl,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (context, url) => Container(
-                height: 200,
-                color: AppColors.primaryBlue.withOpacity(0.1),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-              errorWidget: (context, url, error) => Container(
-                height: 200,
-                color: AppColors.primaryBlue.withOpacity(0.1),
-                child: Center(
-                  child: Text(
-                    widget.word.text[0],
-                    style: const TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
-                  ),
-                ),
-              ),
-            )
-                : Container(
-              height: 200,
-              color: AppColors.primaryBlue.withOpacity(0.1),
-              child: Center(
-                child: Text(
-                  widget.word.text[0],
-                  style: const TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
-                ),
-              ),
-            ),
+                ? Image.network(
+                    widget.word.imageUrl,
+                    height: 200,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+                  )
+                : _buildImagePlaceholder(),
           ),
           Padding(
             padding: const EdgeInsets.all(20),
@@ -468,6 +569,19 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
         ],
       ),
     ).animate().fadeIn().scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1));
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      height: 200,
+      color: AppColors.primaryBlue.withOpacity(0.1),
+      child: Center(
+        child: Text(
+          widget.word.text[0],
+          style: const TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
+        ),
+      ),
+    );
   }
 
   Widget _buildCorrectPronunciationButton() {
@@ -494,7 +608,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
         const SizedBox(height: 16),
 
         GestureDetector(
-          onTap: _isRecording ? _stopRecording : _startRecording,
+          onTap: _isTranscribing ? null : (_isRecording ? _stopRecording : _startRecording),
           child: AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
@@ -505,7 +619,11 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _isRecording ? AppColors.error : AppColors.primaryGreen,
+                    color: _isRecording
+                        ? AppColors.error
+                        : _isTranscribing
+                            ? Colors.grey
+                            : AppColors.primaryGreen,
                     boxShadow: [
                       BoxShadow(
                         color: (_isRecording ? AppColors.error : AppColors.primaryGreen).withOpacity(0.4),
@@ -514,7 +632,11 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
                       ),
                     ],
                   ),
-                  child: Icon(_isRecording ? Icons.stop : Icons.mic, size: 50, color: Colors.white),
+                  child: Icon(
+                    _isRecording ? Icons.stop : Icons.mic,
+                    size: 50,
+                    color: Colors.white,
+                  ),
                 ),
               );
             },
@@ -534,6 +656,14 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
               const Text('جاري التسجيل... اضغط للإيقاف', style: TextStyle(color: Colors.grey)),
             ],
           )
+        else if (_isTranscribing)
+          Column(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 8),
+              const Text('جاري التعرف على الكلام...', style: TextStyle(color: Colors.grey)),
+            ],
+          )
         else
           Text(
             _hasRecording ? 'تم التسجيل بنجاح! ✓' : 'اضغط للتسجيل',
@@ -543,19 +673,32 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
             ),
           ),
 
-        if (_hasRecording) ...[
+        if (_hasRecording && !_isTranscribing) ...[
           const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: _deleteRecording,
-            icon: const Icon(Icons.delete_outline, color: AppColors.error),
-            label: const Text('حذف التسجيل', style: TextStyle(color: AppColors.error)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: _playRecording,
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('استمع'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: _deleteRecording,
+                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                label: const Text('حذف', style: TextStyle(color: AppColors.error)),
+              ),
+            ],
           ),
         ],
       ],
     ).animate().fadeIn(delay: const Duration(milliseconds: 300));
   }
 
-  Widget _buildTranscriptionInput() {
+  Widget _buildTranscriptionResult() {
+    final isMatch = _transcription?.trim() == widget.word.text.trim();
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -566,45 +709,56 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.edit, color: AppColors.primaryPurple),
+              Icon(Icons.hearing, color: AppColors.primaryPurple),
               const SizedBox(width: 8),
-              const Text('ماذا نطق الطفل؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text('ما تم التعرف عليه:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'اكتب ما سمعته من الطفل بالضبط',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _transcription != null
+                  ? (isMatch ? AppColors.primaryGreen : AppColors.primaryOrange).withOpacity(0.1)
+                  : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _transcription != null
+                    ? (isMatch ? AppColors.primaryGreen : AppColors.primaryOrange)
+                    : Colors.grey.shade300,
+              ),
+            ),
+            child: Text(
+              _transcription ?? 'لم يتم التعرف على الكلام',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: _transcription != null
+                    ? (isMatch ? AppColors.primaryGreen : AppColors.primaryOrange)
+                    : Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _transcriptionController,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              hintText: widget.word.text,
-              hintStyle: TextStyle(color: Colors.grey.shade300),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('المطلوب: ', style: TextStyle(color: Colors.grey.shade600)),
+              Text(
+                widget.word.text,
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryBlue, fontSize: 18),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton(
-              onPressed: () {
-                _transcriptionController.text = widget.word.text;
-              },
-              child: const Text('نطق صحيح ✓', style: TextStyle(color: AppColors.primaryGreen)),
-            ),
+              const SizedBox(width: 8),
+              Icon(
+                isMatch ? Icons.check_circle : Icons.compare_arrows,
+                color: isMatch ? AppColors.primaryGreen : AppColors.primaryOrange,
+              ),
+            ],
           ),
         ],
       ),
@@ -618,12 +772,12 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
         onPressed: _isEvaluating ? null : _submitForEvaluation,
         icon: _isEvaluating
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
-        )
-            : const Icon(Icons.send),
-        label: Text(_isEvaluating ? 'جاري التقييم...' : 'إرسال للتقييم'),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+              )
+            : const Icon(Icons.psychology),
+        label: Text(_isEvaluating ? 'جاري التقييم...' : 'تقييم بالذكاء الاصطناعي'),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryPurple,
           foregroundColor: Colors.white,
