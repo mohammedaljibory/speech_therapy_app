@@ -9,6 +9,7 @@ import '../../providers/children_provider.dart';
 import '../../providers/categories_provider.dart';
 import '../../services/firestore_seeder.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../utils/permissions.dart';
 
 class TrainerDashboard extends StatefulWidget {
   const TrainerDashboard({super.key});
@@ -138,12 +139,33 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _getGreeting(),
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          _getGreeting(),
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (auth.currentUser != null)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Color(Permissions.getRoleColor(auth.currentUser!.role)).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              Permissions.getRoleDisplayName(auth.currentUser!.role),
+                              style: TextStyle(
+                                color: Color(Permissions.getRoleColor(auth.currentUser!.role)),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                     Text(
                       auth.currentUser?.name ?? 'مدرب',
@@ -286,7 +308,10 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
   }
 
   Widget _buildMenuGrid() {
-    final menuItems = [
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+
+    final menuItems = <Map<String, dynamic>>[
       {
         'title': 'الأطفال',
         'subtitle': 'إدارة قائمة الأطفال',
@@ -316,6 +341,17 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
         'route': Routes.recording,
       },
     ];
+
+    // Add Admin Panel for admins
+    if (Permissions.canManageUsers(user)) {
+      menuItems.add({
+        'title': 'لوحة التحكم',
+        'subtitle': 'إدارة المدربين والتعيينات',
+        'icon': Icons.admin_panel_settings,
+        'color': AppColors.primaryPink,
+        'route': Routes.adminPanel,
+      });
+    }
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -598,10 +634,13 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
   }
 
   void _showQuickActions() {
+    final auth = context.read<AuthProvider>();
+    final user = auth.currentUser;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (ctx) {
         return Container(
           padding: const EdgeInsets.all(24),
           decoration: const BoxDecoration(
@@ -627,33 +666,50 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
                     ),
               ),
               const SizedBox(height: 24),
-              _buildQuickActionItem(
-                icon: Icons.child_care,
-                label: 'إضافة طفل',
-                color: AppColors.primaryBlue,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.navigateTo(Routes.addChild);
-                },
-              ),
-              _buildQuickActionItem(
-                icon: Icons.text_fields,
-                label: 'إضافة كلمة',
-                color: AppColors.primaryPurple,
-                onTap: () {
-                  Navigator.pop(context);
-                  context.navigateTo(Routes.addWord);
-                },
-              ),
-              _buildQuickActionItem(
-                icon: Icons.category,
-                label: 'إضافة قسم',
-                color: AppColors.primaryGreen,
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Add category dialog
-                },
-              ),
+              // Add Child - Admin only
+              if (Permissions.canAddChildren(user))
+                _buildQuickActionItem(
+                  icon: Icons.child_care,
+                  label: 'إضافة طفل',
+                  color: AppColors.primaryBlue,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.navigateTo(Routes.addChild);
+                  },
+                ),
+              // Add Word - Admin & Trainer
+              if (Permissions.canAddWords(user))
+                _buildQuickActionItem(
+                  icon: Icons.text_fields,
+                  label: 'إضافة كلمة',
+                  color: AppColors.primaryPurple,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.navigateTo(Routes.addWord);
+                  },
+                ),
+              // Add Category - Admin & Trainer
+              if (Permissions.canAddCategories(user))
+                _buildQuickActionItem(
+                  icon: Icons.category,
+                  label: 'إضافة قسم',
+                  color: AppColors.primaryGreen,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.navigateTo(Routes.categories);
+                  },
+                ),
+              // Admin Panel - Admin only
+              if (Permissions.canManageUsers(user))
+                _buildQuickActionItem(
+                  icon: Icons.admin_panel_settings,
+                  label: 'لوحة التحكم',
+                  color: AppColors.primaryPink,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.navigateTo(Routes.adminPanel);
+                  },
+                ),
               const SizedBox(height: 16),
             ],
           ),

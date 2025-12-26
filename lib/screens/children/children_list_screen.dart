@@ -9,6 +9,7 @@ import '../../providers/children_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../utils/permissions.dart';
 
 class ChildrenListScreen extends StatefulWidget {
   const ChildrenListScreen({super.key});
@@ -101,13 +102,16 @@ class _ChildrenListScreenState extends State<ChildrenListScreen> {
           ),
         ),
       ),
-      floatingActionButton: GradientFAB(
-        icon: Icons.add,
-        onPressed: () {
-          context.navigateTo(Routes.addChild);
-        },
-        tooltip: 'إضافة طفل',
-      ),
+      floatingActionButton: Permissions.canAddChildren(
+              context.read<AuthProvider>().currentUser)
+          ? GradientFAB(
+              icon: Icons.add,
+              onPressed: () {
+                context.navigateTo(Routes.addChild);
+              },
+              tooltip: 'إضافة طفل',
+            )
+          : null,
     );
   }
 
@@ -365,7 +369,9 @@ class _ChildrenListScreenState extends State<ChildrenListScreen> {
               color: AppColors.textSecondary,
             ),
           ),
-          if (_searchQuery.isEmpty) ...[
+          if (_searchQuery.isEmpty &&
+              Permissions.canAddChildren(
+                  context.read<AuthProvider>().currentUser)) ...[
             const SizedBox(height: 32),
             CustomButton(
               text: 'إضافة طفل',

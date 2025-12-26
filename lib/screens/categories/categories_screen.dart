@@ -6,7 +6,9 @@ import '../../config/themes.dart';
 import '../../config/routes.dart';
 import '../../models/category_model.dart';
 import '../../providers/categories_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/common/custom_button.dart';
+import '../../utils/permissions.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -71,11 +73,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           ),
         ),
       ),
-      floatingActionButton: GradientFAB(
-        icon: Icons.add,
-        onPressed: () => _showAddCategoryDialog(),
-        gradient: AppColors.gradientPurple,
-      ),
+      floatingActionButton: Permissions.canAddCategories(
+              context.read<AuthProvider>().currentUser)
+          ? GradientFAB(
+              icon: Icons.add,
+              onPressed: () => _showAddCategoryDialog(),
+              gradient: AppColors.gradientPurple,
+            )
+          : null,
     );
   }
 

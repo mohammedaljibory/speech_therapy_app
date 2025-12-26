@@ -15,6 +15,7 @@ import '../screens/evaluation/evaluation_screen.dart';
 import '../screens/evaluation/comparison_screen.dart';
 import '../screens/reports/reports_screen.dart';
 import '../screens/reports/export_report_screen.dart';
+import '../screens/admin/admin_panel_screen.dart';
 import '../models/word_model.dart';
 import '../models/child_model.dart';
 
@@ -35,6 +36,7 @@ class Routes {
   static const String comparison = '/comparison';
   static const String reports = '/reports';
   static const String exportReport = '/reports/export';
+  static const String adminPanel = '/admin';
 }
 
 /// App Route Generator
@@ -165,6 +167,10 @@ class AppRoutes {
           );
         }
         return _errorRoute('Export data required');
+
+    // Admin Routes
+      case Routes.adminPanel:
+        return _buildRoute(const AdminPanelScreen(), settings);
 
       default:
         return _errorRoute('Page not found');
