@@ -24,7 +24,7 @@ class Permissions {
 
   /// Check if user can add categories (Admin & Trainer)
   static bool canAddCategories(UserModel? user) {
-    return user?.isAdmin ?? false || user?.isTrainer ?? false;
+    return (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
   }
 
   /// Check if user can delete categories (Admin only)
@@ -34,17 +34,17 @@ class Permissions {
 
   /// Check if user can add words (Admin & Trainer)
   static bool canAddWords(UserModel? user) {
-    return user?.isAdmin ?? false || user?.isTrainer ?? false;
+    return (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
   }
 
   /// Check if user can delete words (Admin & Trainer)
   static bool canDeleteWords(UserModel? user) {
-    return user?.isAdmin ?? false || user?.isTrainer ?? false;
+    return (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
   }
 
   /// Check if user can generate reports (Admin & Trainer)
   static bool canGenerateReports(UserModel? user) {
-    return user?.isAdmin ?? false || user?.isTrainer ?? false;
+    return (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
   }
 
   /// Check if user can view all children (Admin only)
