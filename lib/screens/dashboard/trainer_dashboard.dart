@@ -338,7 +338,7 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
         'subtitle': 'تسجيلات الأطفال',
         'icon': Icons.mic,
         'color': AppColors.primaryOrange,
-        'route': Routes.recording,
+        'route': Routes.recordingsList,
       },
     ];
 

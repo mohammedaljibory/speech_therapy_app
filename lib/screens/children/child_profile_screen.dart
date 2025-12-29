@@ -4,9 +4,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../config/themes.dart';
 import '../../config/routes.dart';
+import '../../config/constants.dart';
 import '../../models/child_model.dart';
 import '../../providers/children_provider.dart';
 import '../../providers/evaluation_provider.dart';
+import '../../providers/categories_provider.dart';
 import '../../widgets/common/custom_button.dart';
 
 class ChildProfileScreen extends StatefulWidget {
@@ -130,9 +132,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
           const Spacer(),
           CustomIconButton(
             icon: Icons.edit,
-            onPressed: () {
-              // TODO: Edit child
-            },
+            onPressed: () => _showEditChildDialog(),
             backgroundColor: Colors.white,
             tooltip: 'تعديل',
           ),
@@ -394,9 +394,10 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
         'title': 'التسجيلات',
         'icon': Icons.mic,
         'color': AppColors.primaryBlue,
-        'onTap': () {
-          // TODO: Show recordings
-        },
+        'onTap': () => context.navigateTo(
+              Routes.recordingsList,
+              arguments: widget.childId,
+            ),
       },
       {
         'title': 'التقارير',
@@ -411,9 +412,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
         'title': 'المقارنة',
         'icon': Icons.compare_arrows,
         'color': AppColors.primaryOrange,
-        'onTap': () {
-          // TODO: Show comparison
-        },
+        'onTap': () => _showComparisonWordSelector(),
       },
     ];
 
@@ -616,6 +615,331 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _showEditChildDialog() {
+    final nameController = TextEditingController(text: _child!.name);
+    final notesController = TextEditingController(text: _child!.notes ?? '');
+    int selectedAge = _child!.age;
+    String selectedGender = _child!.gender;
+    String selectedLevel = _child!.level;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('تعديل بيانات الطفل', textAlign: TextAlign.center),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: 'اسم الطفل',
+                    prefixIcon: const Icon(Icons.person),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Age selector
+                const Text('العمر:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 50,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 15,
+                    itemBuilder: (context, index) {
+                      final age = index + 1;
+                      final isSelected = age == selectedAge;
+                      return GestureDetector(
+                        onTap: () => setDialogState(() => selectedAge = age),
+                        child: Container(
+                          width: 40,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primaryBlue : Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$age',
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Gender selector
+                const Text('الجنس:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setDialogState(() => selectedGender = 'male'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: selectedGender == 'male'
+                                ? AppColors.primaryBlue.withOpacity(0.1)
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selectedGender == 'male'
+                                  ? AppColors.primaryBlue
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.male,
+                                  color: selectedGender == 'male'
+                                      ? AppColors.primaryBlue
+                                      : Colors.grey),
+                              const SizedBox(width: 4),
+                              Text('ذكر',
+                                  style: TextStyle(
+                                      color: selectedGender == 'male'
+                                          ? AppColors.primaryBlue
+                                          : Colors.grey)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setDialogState(() => selectedGender = 'female'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: selectedGender == 'female'
+                                ? AppColors.primaryPink.withOpacity(0.1)
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selectedGender == 'female'
+                                  ? AppColors.primaryPink
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.female,
+                                  color: selectedGender == 'female'
+                                      ? AppColors.primaryPink
+                                      : Colors.grey),
+                              const SizedBox(width: 4),
+                              Text('أنثى',
+                                  style: TextStyle(
+                                      color: selectedGender == 'female'
+                                          ? AppColors.primaryPink
+                                          : Colors.grey)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Level selector
+                const Text('المستوى:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  children: AppConstants.childLevels.map((level) {
+                    final isSelected = selectedLevel == level;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setDialogState(() => selectedLevel = level),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppColors.primaryGreen
+                                : Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Text(
+                              level,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: notesController,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'ملاحظات',
+                    prefixIcon: const Icon(Icons.note),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
+            ),
+            Consumer<ChildrenProvider>(
+              builder: (context, provider, _) => ElevatedButton(
+                onPressed: provider.isLoading
+                    ? null
+                    : () async {
+                        if (nameController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('يرجى إدخال اسم الطفل')),
+                          );
+                          return;
+                        }
+                        final success = await provider.updateChild(
+                          childId: widget.childId,
+                          name: nameController.text.trim(),
+                          age: selectedAge,
+                          gender: selectedGender,
+                          level: selectedLevel,
+                          notes: notesController.text.trim().isNotEmpty
+                              ? notesController.text.trim()
+                              : null,
+                        );
+                        if (success && ctx.mounted) {
+                          Navigator.pop(ctx);
+                          await _loadData();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تم تحديث البيانات بنجاح'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: provider.isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      )
+                    : const Text('حفظ', style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showComparisonWordSelector() {
+    final categoriesProvider = context.read<CategoriesProvider>();
+    final words = categoriesProvider.words;
+
+    if (words.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد كلمات للمقارنة')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'اختر كلمة للمقارنة',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: words.length,
+                itemBuilder: (context, index) {
+                  final word = words[index];
+                  return ListTile(
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryOrange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: word.imageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(word.imageUrl!, fit: BoxFit.cover),
+                            )
+                          : const Icon(Icons.text_fields, color: AppColors.primaryOrange),
+                    ),
+                    title: Text(word.text, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(word.textEn ?? ''),
+                    trailing: const Icon(Icons.compare_arrows, color: AppColors.primaryOrange),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.navigateTo(Routes.comparison, arguments: {
+                        'childId': widget.childId,
+                        'wordId': word.id,
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

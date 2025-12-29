@@ -11,6 +11,7 @@ import '../screens/categories/category_words_screen.dart';
 import '../screens/words/add_word_screen.dart';
 import '../screens/words/word_practice_screen.dart';
 import '../screens/recording/recording_screen.dart';
+import '../screens/recording/recordings_list_screen.dart';
 import '../screens/evaluation/evaluation_screen.dart';
 import '../screens/evaluation/comparison_screen.dart';
 import '../screens/reports/reports_screen.dart';
@@ -26,12 +27,14 @@ class Routes {
   static const String dashboard = '/dashboard';
   static const String children = '/children';
   static const String addChild = '/children/add';
+  static const String editChild = '/children/edit';
   static const String childProfile = '/children/profile';
   static const String categories = '/categories';
   static const String categoryWords = '/category-words';
   static const String addWord = '/add-word';
   static const String wordPractice = '/word-practice';
   static const String recording = '/recording';
+  static const String recordingsList = '/recordings';
   static const String evaluation = '/evaluation';
   static const String comparison = '/comparison';
   static const String reports = '/reports';
@@ -108,7 +111,7 @@ class AppRoutes {
         }
         return _errorRoute('Word data required');
 
-    // Recording Route
+    // Recording Routes
       case Routes.recording:
         if (args is Map<String, dynamic>) {
           return _buildRoute(
@@ -120,6 +123,12 @@ class AppRoutes {
           );
         }
         return _errorRoute('Recording data required');
+
+      case Routes.recordingsList:
+        if (args is String?) {
+          return _buildRoute(RecordingsListScreen(childId: args), settings);
+        }
+        return _buildRoute(const RecordingsListScreen(), settings);
 
     // Evaluation Routes
       case Routes.evaluation:
