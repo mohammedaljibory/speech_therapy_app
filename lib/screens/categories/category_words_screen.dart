@@ -320,7 +320,7 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                     // Edit Button (for admin/trainer)
                     Consumer<AuthProvider>(
                       builder: (context, authProvider, _) {
-                        final user = authProvider.user;
+                        final user = authProvider.currentUser;
                         final canEdit = (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
                         if (!canEdit) return const SizedBox.shrink();
 
