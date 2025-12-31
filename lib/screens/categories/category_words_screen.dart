@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../config/themes.dart';
 import '../../models/word_model.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/common/custom_text_field.dart';
 
 class CategoryWordsScreen extends StatefulWidget {
   final String categoryId;
@@ -314,6 +316,41 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                         ),
                       ),
                     ),
+
+                    // Edit Button (for admin/trainer)
+                    Consumer<AuthProvider>(
+                      builder: (context, authProvider, _) {
+                        final user = authProvider.user;
+                        final canEdit = (user?.isAdmin ?? false) || (user?.isTrainer ?? false);
+                        if (!canEdit) return const SizedBox.shrink();
+
+                        return Positioned(
+                          top: 8,
+                          left: 8,
+                          child: GestureDetector(
+                            onTap: () => _showEditWordDialog(word),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.edit,
+                                size: 16,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -533,6 +570,213 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Show edit word dialog for admins/trainers to change image and word details
+  void _showEditWordDialog(WordModel word) {
+    final textController = TextEditingController(text: word.text);
+    final textEnController = TextEditingController(text: word.textEn ?? '');
+    final imageUrlController = TextEditingController(text: word.imageUrl);
+    final phoneticController = TextEditingController(text: word.phonetic ?? '');
+    int difficulty = word.difficulty;
+    String? selectedImagePath;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> pickImage() async {
+            final picker = ImagePicker();
+            final image = await picker.pickImage(
+              source: ImageSource.gallery,
+              maxWidth: 800,
+              imageQuality: 85,
+            );
+            if (image != null) {
+              setDialogState(() {
+                selectedImagePath = image.path;
+                imageUrlController.text = image.path;
+              });
+            }
+          }
+
+          return AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.edit, color: AppColors.primaryBlue),
+                SizedBox(width: 8),
+                Text('تعديل الكلمة'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Image Preview
+                  const Text('الصورة', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: pickImage,
+                    child: Container(
+                      height: 120,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (selectedImagePath != null || imageUrlController.text.isNotEmpty)
+                              CachedNetworkImage(
+                                imageUrl: selectedImagePath ?? imageUrlController.text,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                errorWidget: (_, __, ___) => const Center(
+                                  child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                                ),
+                              )
+                            else
+                              const Center(
+                                child: Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey),
+                              ),
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Image URL Input
+                  CustomTextField(
+                    controller: imageUrlController,
+                    label: 'رابط الصورة (URL)',
+                    prefixIcon: Icons.link,
+                    hint: 'https://example.com/image.jpg',
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Word Text
+                  CustomTextField(
+                    controller: textController,
+                    label: 'الكلمة بالعربي',
+                    prefixIcon: Icons.text_fields,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // English Text
+                  CustomTextField(
+                    controller: textEnController,
+                    label: 'الكلمة بالإنجليزي',
+                    prefixIcon: Icons.translate,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Phonetic
+                  CustomTextField(
+                    controller: phoneticController,
+                    label: 'النطق الصوتي',
+                    prefixIcon: Icons.record_voice_over,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Difficulty
+                  const Text('مستوى الصعوبة', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: List.generate(5, (i) {
+                      final level = i + 1;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => difficulty = level),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: difficulty >= level
+                                  ? AppColors.primaryOrange
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.star,
+                              color: difficulty >= level ? Colors.white : Colors.grey,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final provider = context.read<CategoriesProvider>();
+
+                  final success = await provider.updateWord(
+                    wordId: word.id,
+                    text: textController.text.isNotEmpty ? textController.text : null,
+                    textEn: textEnController.text.isNotEmpty ? textEnController.text : null,
+                    imageUrl: imageUrlController.text.isNotEmpty ? imageUrlController.text : null,
+                    phonetic: phoneticController.text.isNotEmpty ? phoneticController.text : null,
+                    difficulty: difficulty,
+                  );
+
+                  if (mounted) {
+                    Navigator.pop(context);
+                    if (success) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text('تم تحديث الكلمة بنجاح'),
+                          backgroundColor: AppColors.success,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(
+                          content: Text('فشل في تحديث الكلمة'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('حفظ التغييرات'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
