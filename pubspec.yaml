@@ -28,6 +28,7 @@ dependencies:
   # Audio Recording & Playing
   record: ^5.1.2
   audioplayers: ^6.1.0
+  flutter_tts: ^4.0.2
 
   # HTTP for API calls
   http: ^1.2.0

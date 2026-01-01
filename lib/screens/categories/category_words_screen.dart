@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../config/themes.dart';
 import '../../models/word_model.dart';
@@ -27,20 +28,37 @@ class CategoryWordsScreen extends StatefulWidget {
 
 class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final FlutterTts _flutterTts = FlutterTts();
   String? _playingWordId;
   bool _isLoadingAudio = false;
 
   @override
   void initState() {
     super.initState();
+    _initTts();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWords();
+    });
+  }
+
+  /// Initialize Text-to-Speech with Arabic settings
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage('ar-SA'); // Arabic - Saudi Arabia
+    await _flutterTts.setSpeechRate(0.4); // Slower for children
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+
+    _flutterTts.setCompletionHandler(() {
+      if (mounted) {
+        setState(() => _playingWordId = null);
+      }
     });
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
@@ -49,45 +67,45 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
   }
 
   Future<void> _playPronunciation(WordModel word) async {
-    if (word.correctPronunciationUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('لا يوجد ملف صوتي لهذه الكلمة'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _playingWordId = word.id;
       _isLoadingAudio = true;
     });
 
     try {
-      await _audioPlayer.stop();
-      await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
-      
-      _audioPlayer.onPlayerComplete.listen((_) {
-        if (mounted) {
-          setState(() {
-            _playingWordId = null;
-          });
-        }
-      });
+      // If there's a custom audio URL, play it
+      if (word.correctPronunciationUrl.isNotEmpty) {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
+
+        _audioPlayer.onPlayerComplete.listen((_) {
+          if (mounted) {
+            setState(() => _playingWordId = null);
+          }
+        });
+      } else {
+        // Use Text-to-Speech as automatic fallback
+        await _flutterTts.stop();
+        await _flutterTts.speak(word.text);
+      }
     } catch (e) {
       debugPrint('Error playing audio: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل في تشغيل الصوت'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      // Try TTS as fallback if audio playback fails
+      try {
+        await _flutterTts.speak(word.text);
+      } catch (ttsError) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('فشل في تشغيل الصوت'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoadingAudio = false;
-        });
+        setState(() => _isLoadingAudio = false);
       }
     }
   }
@@ -580,6 +598,7 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
     final textEnController = TextEditingController(text: word.textEn ?? '');
     final imageUrlController = TextEditingController(text: word.imageUrl);
     final phoneticController = TextEditingController(text: word.phonetic ?? '');
+    final audioUrlController = TextEditingController(text: word.correctPronunciationUrl);
     int difficulty = word.difficulty;
     String? selectedImagePath;
 
@@ -700,6 +719,52 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // Audio URL Section
+                  const Text('الصوت', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CustomTextField(
+                          controller: audioUrlController,
+                          label: 'رابط الصوت (اختياري)',
+                          prefixIcon: Icons.audiotrack,
+                          hint: 'https://example.com/audio.mp3',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Test audio button
+                      IconButton(
+                        onPressed: () async {
+                          if (audioUrlController.text.isNotEmpty) {
+                            try {
+                              await _audioPlayer.stop();
+                              await _audioPlayer.play(UrlSource(audioUrlController.text));
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('فشل في تشغيل الصوت'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          } else {
+                            // Test TTS
+                            await _flutterTts.speak(textController.text);
+                          }
+                        },
+                        icon: const Icon(Icons.play_circle, color: AppColors.primaryGreen),
+                        tooltip: 'تجربة الصوت',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'اتركه فارغاً لاستخدام النطق التلقائي (TTS)',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 16),
+
                   // Difficulty
                   const Text('مستوى الصعوبة', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
@@ -746,6 +811,7 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                     textEn: textEnController.text.isNotEmpty ? textEnController.text : null,
                     imageUrl: imageUrlController.text.isNotEmpty ? imageUrlController.text : null,
                     phonetic: phoneticController.text.isNotEmpty ? phoneticController.text : null,
+                    correctPronunciationUrl: audioUrlController.text,
                     difficulty: difficulty,
                   );
 
