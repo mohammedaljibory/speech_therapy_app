@@ -69,14 +69,42 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
 
   /// Initialize Text-to-Speech with Arabic settings
   Future<void> _initTts() async {
-    await _flutterTts.setLanguage('ar-SA');
-    await _flutterTts.setSpeechRate(0.4); // Slower for children
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
+    try {
+      // Set error handler
+      _flutterTts.setErrorHandler((msg) {
+        debugPrint('TTS Error: $msg');
+        if (mounted) setState(() => _isPlayingCorrect = false);
+      });
 
-    _flutterTts.setCompletionHandler(() {
-      if (mounted) setState(() => _isPlayingCorrect = false);
-    });
+      // Set completion handler
+      _flutterTts.setCompletionHandler(() {
+        if (mounted) setState(() => _isPlayingCorrect = false);
+      });
+
+      // Try to set Arabic language
+      if (kIsWeb) {
+        // On web, try different Arabic variants
+        var result = await _flutterTts.setLanguage('ar');
+        if (result != 1) {
+          result = await _flutterTts.setLanguage('ar-SA');
+        }
+        if (result != 1) {
+          result = await _flutterTts.setLanguage('ar-EG');
+        }
+      } else {
+        await _flutterTts.setLanguage('ar-SA');
+      }
+
+      await _flutterTts.setSpeechRate(kIsWeb ? 0.5 : 0.4);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
+
+      // Log available languages for debugging
+      final languages = await _flutterTts.getLanguages;
+      debugPrint('Available TTS languages: $languages');
+    } catch (e) {
+      debugPrint('TTS Init Error: $e');
+    }
   }
 
   void _initAnimation() {
@@ -131,19 +159,21 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
           if (mounted) setState(() => _isPlayingCorrect = false);
         });
       } else {
-        // Use Text-to-Speech as automatic fallback
+        // Use Text-to-Speech
         await _flutterTts.stop();
-        await _flutterTts.speak(widget.word.text);
+        final result = await _flutterTts.speak(widget.word.text);
+        debugPrint('TTS speak result: $result for word: ${widget.word.text}');
+
+        if (result != 1) {
+          // TTS failed
+          _showSnackBar('النطق التلقائي غير متوفر في المتصفح', isError: false);
+          if (mounted) setState(() => _isPlayingCorrect = false);
+        }
       }
     } catch (e) {
       debugPrint('Error playing audio: $e');
-      // Try TTS as fallback if audio playback fails
-      try {
-        await _flutterTts.speak(widget.word.text);
-      } catch (ttsError) {
-        _showSnackBar('فشل في تشغيل الصوت', isError: true);
-        if (mounted) setState(() => _isPlayingCorrect = false);
-      }
+      _showSnackBar('خطأ: $e', isError: true);
+      if (mounted) setState(() => _isPlayingCorrect = false);
     }
   }
 

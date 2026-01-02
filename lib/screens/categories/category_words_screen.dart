@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -43,16 +44,42 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
 
   /// Initialize Text-to-Speech with Arabic settings
   Future<void> _initTts() async {
-    await _flutterTts.setLanguage('ar-SA'); // Arabic - Saudi Arabia
-    await _flutterTts.setSpeechRate(0.4); // Slower for children
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
+    try {
+      // Set error handler
+      _flutterTts.setErrorHandler((msg) {
+        debugPrint('TTS Error: $msg');
+        if (mounted) setState(() => _playingWordId = null);
+      });
 
-    _flutterTts.setCompletionHandler(() {
-      if (mounted) {
-        setState(() => _playingWordId = null);
+      // Set completion handler
+      _flutterTts.setCompletionHandler(() {
+        if (mounted) setState(() => _playingWordId = null);
+      });
+
+      // Try to set Arabic language
+      if (kIsWeb) {
+        // On web, try different Arabic variants
+        var result = await _flutterTts.setLanguage('ar');
+        if (result != 1) {
+          result = await _flutterTts.setLanguage('ar-SA');
+        }
+        if (result != 1) {
+          result = await _flutterTts.setLanguage('ar-EG');
+        }
+      } else {
+        await _flutterTts.setLanguage('ar-SA');
       }
-    });
+
+      await _flutterTts.setSpeechRate(kIsWeb ? 0.5 : 0.4);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
+
+      // Log available languages for debugging
+      final languages = await _flutterTts.getLanguages;
+      debugPrint('Available TTS languages: $languages');
+    } catch (e) {
+      debugPrint('TTS Init Error: $e');
+    }
   }
 
   @override
@@ -84,24 +111,35 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
           }
         });
       } else {
-        // Use Text-to-Speech as automatic fallback
+        // Use Text-to-Speech
         await _flutterTts.stop();
-        await _flutterTts.speak(word.text);
+        final result = await _flutterTts.speak(word.text);
+        debugPrint('TTS speak result: $result for word: ${word.text}');
+
+        if (result != 1) {
+          // TTS failed, show message
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('النطق التلقائي غير متوفر - الكلمة: ${word.text}'),
+                backgroundColor: AppColors.warning,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+            setState(() => _playingWordId = null);
+          }
+        }
       }
     } catch (e) {
       debugPrint('Error playing audio: $e');
-      // Try TTS as fallback if audio playback fails
-      try {
-        await _flutterTts.speak(word.text);
-      } catch (ttsError) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('فشل في تشغيل الصوت'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        setState(() => _playingWordId = null);
       }
     } finally {
       if (mounted) {
