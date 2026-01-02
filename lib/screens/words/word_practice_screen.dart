@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:record/record.dart';
 import 'dart:async';
 
@@ -36,6 +37,7 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioRecorder _audioRecorder = AudioRecorder();
   final WhisperService _whisperService = WhisperService();
+  final FlutterTts _flutterTts = FlutterTts();
 
   // State
   bool _isPlayingCorrect = false;
@@ -60,8 +62,21 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
   void initState() {
     super.initState();
     _initAnimation();
+    _initTts();
     _loadChildren();
     _checkPermissions();
+  }
+
+  /// Initialize Text-to-Speech with Arabic settings
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage('ar-SA');
+    await _flutterTts.setSpeechRate(0.4); // Slower for children
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+
+    _flutterTts.setCompletionHandler(() {
+      if (mounted) setState(() => _isPlayingCorrect = false);
+    });
   }
 
   void _initAnimation() {
@@ -97,29 +112,38 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
   void dispose() {
     _audioPlayer.dispose();
     _audioRecorder.dispose();
+    _flutterTts.stop();
     _recordingTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
 
   Future<void> _playCorrectPronunciation() async {
-    if (widget.word.correctPronunciationUrl.isEmpty) {
-      _showSnackBar('لا يوجد ملف صوتي للنطق الصحيح', isError: false);
-      return;
-    }
-
     setState(() => _isPlayingCorrect = true);
 
     try {
-      await _audioPlayer.stop();
-      await _audioPlayer.play(UrlSource(widget.word.correctPronunciationUrl));
+      // If there's a custom audio URL, play it
+      if (widget.word.correctPronunciationUrl.isNotEmpty) {
+        await _audioPlayer.stop();
+        await _audioPlayer.play(UrlSource(widget.word.correctPronunciationUrl));
 
-      _audioPlayer.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _isPlayingCorrect = false);
-      });
+        _audioPlayer.onPlayerComplete.listen((_) {
+          if (mounted) setState(() => _isPlayingCorrect = false);
+        });
+      } else {
+        // Use Text-to-Speech as automatic fallback
+        await _flutterTts.stop();
+        await _flutterTts.speak(widget.word.text);
+      }
     } catch (e) {
-      _showSnackBar('فشل في تشغيل الصوت', isError: true);
-      setState(() => _isPlayingCorrect = false);
+      debugPrint('Error playing audio: $e');
+      // Try TTS as fallback if audio playback fails
+      try {
+        await _flutterTts.speak(widget.word.text);
+      } catch (ttsError) {
+        _showSnackBar('فشل في تشغيل الصوت', isError: true);
+        if (mounted) setState(() => _isPlayingCorrect = false);
+      }
     }
   }
 
@@ -579,14 +603,12 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
   }
 
   Widget _buildCorrectPronunciationButton() {
-    final hasAudio = widget.word.correctPronunciationUrl.isNotEmpty;
-
     return ElevatedButton.icon(
       onPressed: _isPlayingCorrect ? null : _playCorrectPronunciation,
-      icon: Icon(hasAudio ? (_isPlayingCorrect ? Icons.stop : Icons.volume_up) : Icons.volume_off),
-      label: Text(_isPlayingCorrect ? 'جاري التشغيل...' : hasAudio ? 'استمع للنطق الصحيح' : 'لا يوجد ملف صوتي'),
+      icon: Icon(_isPlayingCorrect ? Icons.stop : Icons.volume_up),
+      label: Text(_isPlayingCorrect ? 'جاري التشغيل...' : 'استمع للنطق الصحيح'),
       style: ElevatedButton.styleFrom(
-        backgroundColor: hasAudio ? AppColors.primaryBlue : Colors.grey,
+        backgroundColor: AppColors.primaryBlue,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
