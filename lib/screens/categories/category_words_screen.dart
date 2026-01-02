@@ -6,6 +6,11 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:record/record.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:typed_data';
+import '../recording/recording_screen_io.dart'
+    if (dart.library.html) '../recording/recording_screen_web.dart' as platform;
 
 import '../../config/themes.dart';
 import '../../models/word_model.dart';
@@ -640,6 +645,13 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
     int difficulty = word.difficulty;
     String? selectedImagePath;
 
+    // Audio recording state
+    final audioRecorder = AudioRecorder();
+    bool isRecording = false;
+    bool isUploading = false;
+    String? recordingPath;
+    Uint8List? recordingBytes;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -656,6 +668,109 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                 selectedImagePath = image.path;
                 imageUrlController.text = image.path;
               });
+            }
+          }
+
+          // Start recording audio
+          Future<void> startRecording() async {
+            try {
+              final hasPermission = await audioRecorder.hasPermission();
+              if (!hasPermission) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('يرجى منح إذن الميكروفون')),
+                );
+                return;
+              }
+
+              final filename = 'word_audio_${DateTime.now().millisecondsSinceEpoch}';
+              String path;
+              if (kIsWeb) {
+                path = '$filename.webm';
+              } else {
+                path = '/tmp/$filename.m4a';
+              }
+
+              final config = RecordConfig(
+                encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
+                sampleRate: 16000,
+                bitRate: 128000,
+              );
+
+              await audioRecorder.start(config, path: path);
+              setDialogState(() {
+                isRecording = true;
+                recordingPath = path;
+              });
+            } catch (e) {
+              debugPrint('Error starting recording: $e');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('فشل في بدء التسجيل: $e')),
+              );
+            }
+          }
+
+          // Stop recording and upload
+          Future<void> stopRecordingAndUpload() async {
+            try {
+              final path = await audioRecorder.stop();
+              if (path == null) {
+                setDialogState(() => isRecording = false);
+                return;
+              }
+
+              setDialogState(() {
+                isRecording = false;
+                isUploading = true;
+              });
+
+              // Read audio bytes using platform-specific method
+              Uint8List? audioBytes;
+              if (kIsWeb) {
+                audioBytes = await platform.readBlobUrl(path);
+              } else {
+                audioBytes = await platform.readFileBytes(path);
+              }
+
+              if (audioBytes == null || audioBytes.isEmpty) {
+                throw Exception('فشل في قراءة ملف الصوت');
+              }
+
+              // Upload to Firebase Storage
+              final storageRef = FirebaseStorage.instance
+                  .ref()
+                  .child('word_audio')
+                  .child('${word.id}_${DateTime.now().millisecondsSinceEpoch}.${kIsWeb ? 'webm' : 'm4a'}');
+
+              final uploadTask = await storageRef.putData(
+                audioBytes,
+                SettableMetadata(contentType: kIsWeb ? 'audio/webm' : 'audio/m4a'),
+              );
+
+              final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+              setDialogState(() {
+                audioUrlController.text = downloadUrl;
+                isUploading = false;
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تم رفع الصوت بنجاح!'),
+                  backgroundColor: AppColors.success,
+                ),
+              );
+            } catch (e) {
+              debugPrint('Error uploading audio: $e');
+              setDialogState(() {
+                isRecording = false;
+                isUploading = false;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('فشل في رفع الصوت: $e'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
             }
           }
 
@@ -760,13 +875,115 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                   // Audio URL Section
                   const Text('الصوت', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
+
+                  // Record Audio Button
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isRecording
+                          ? AppColors.error.withOpacity(0.1)
+                          : isUploading
+                              ? AppColors.primaryBlue.withOpacity(0.1)
+                              : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isRecording ? AppColors.error : Colors.grey.shade300,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        // Record/Stop Button
+                        GestureDetector(
+                          onTap: isUploading
+                              ? null
+                              : (isRecording ? stopRecordingAndUpload : startRecording),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isRecording ? AppColors.error : AppColors.primaryGreen,
+                            ),
+                            child: isUploading
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                                    ),
+                                  )
+                                : Icon(
+                                    isRecording ? Icons.stop : Icons.mic,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isUploading
+                                    ? 'جاري رفع الصوت...'
+                                    : isRecording
+                                        ? 'جاري التسجيل... اضغط للإيقاف'
+                                        : 'اضغط لتسجيل صوتك',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isRecording ? AppColors.error : AppColors.textPrimary,
+                                ),
+                              ),
+                              if (audioUrlController.text.isNotEmpty && !isRecording && !isUploading)
+                                const Text(
+                                  'تم تسجيل صوت ✓',
+                                  style: TextStyle(color: AppColors.success, fontSize: 12),
+                                ),
+                            ],
+                          ),
+                        ),
+                        // Play button (if has audio)
+                        if (audioUrlController.text.isNotEmpty && !isRecording && !isUploading)
+                          IconButton(
+                            onPressed: () async {
+                              try {
+                                await _audioPlayer.stop();
+                                await _audioPlayer.play(UrlSource(audioUrlController.text));
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('فشل في تشغيل الصوت')),
+                                );
+                              }
+                            },
+                            icon: const Icon(Icons.play_circle, color: AppColors.primaryBlue),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Or use URL
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('أو أدخل رابط', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
                   Row(
                     children: [
                       Expanded(
                         child: CustomTextField(
                           controller: audioUrlController,
-                          label: 'رابط الصوت (اختياري)',
-                          prefixIcon: Icons.audiotrack,
+                          label: 'رابط الصوت (URL)',
+                          prefixIcon: Icons.link,
                           hint: 'https://example.com/audio.mp3',
                         ),
                       ),
