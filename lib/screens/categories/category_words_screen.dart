@@ -42,9 +42,27 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
   void initState() {
     super.initState();
     _initTts();
+    _initAudioPlayer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWords();
     });
+  }
+
+  /// Initialize Audio Player with error handling
+  void _initAudioPlayer() {
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingWordId = null);
+    });
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      debugPrint('AudioPlayer state: $state');
+      if (state == PlayerState.stopped || state == PlayerState.completed) {
+        if (mounted) setState(() => _playingWordId = null);
+      }
+    });
+
+    // Set release mode to stop after playing
+    _audioPlayer.setReleaseMode(ReleaseMode.stop);
   }
 
   /// Initialize Text-to-Speech with Arabic settings
@@ -107,14 +125,28 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
     try {
       // If there's a custom audio URL, play it
       if (word.correctPronunciationUrl.isNotEmpty) {
+        debugPrint('Playing audio URL: ${word.correctPronunciationUrl}');
         await _audioPlayer.stop();
-        await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
 
-        _audioPlayer.onPlayerComplete.listen((_) {
+        try {
+          await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
+          debugPrint('Audio playback started successfully');
+        } catch (audioError) {
+          debugPrint('AudioPlayer error: $audioError');
+          // If audio fails, try TTS as fallback
           if (mounted) {
-            setState(() => _playingWordId = null);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('فشل تشغيل الصوت، جاري استخدام النطق التلقائي...'),
+                backgroundColor: AppColors.warning,
+                duration: const Duration(seconds: 2),
+              ),
+            );
           }
-        });
+          // Fallback to TTS
+          await _flutterTts.stop();
+          await _flutterTts.speak(word.text);
+        }
       } else {
         // Use Text-to-Speech
         await _flutterTts.stop();
@@ -684,15 +716,24 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
 
               final filename = 'word_audio_${DateTime.now().millisecondsSinceEpoch}';
               String path;
+              String extension;
+              AudioEncoder encoder;
+
               if (kIsWeb) {
-                path = '$filename.webm';
+                // Use WAV on web for better compatibility
+                extension = 'wav';
+                encoder = AudioEncoder.wav;
+                path = '$filename.$extension';
               } else {
-                path = '/tmp/$filename.m4a';
+                // Use AAC on mobile for smaller file size
+                extension = 'm4a';
+                encoder = AudioEncoder.aacLc;
+                path = '/tmp/$filename.$extension';
               }
 
               final config = RecordConfig(
-                encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc,
-                sampleRate: 16000,
+                encoder: encoder,
+                sampleRate: 44100,
                 bitRate: 128000,
               );
 
@@ -736,14 +777,19 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
               }
 
               // Upload to Firebase Storage
+              final audioExtension = kIsWeb ? 'wav' : 'm4a';
+              final contentType = kIsWeb ? 'audio/wav' : 'audio/mp4';
+
               final storageRef = FirebaseStorage.instance
                   .ref()
                   .child('word_audio')
-                  .child('${word.id}_${DateTime.now().millisecondsSinceEpoch}.${kIsWeb ? 'webm' : 'm4a'}');
+                  .child('${word.id}_${DateTime.now().millisecondsSinceEpoch}.$audioExtension');
+
+              debugPrint('Uploading audio: ${audioBytes.length} bytes as $contentType');
 
               final uploadTask = await storageRef.putData(
                 audioBytes,
-                SettableMetadata(contentType: kIsWeb ? 'audio/webm' : 'audio/m4a'),
+                SettableMetadata(contentType: contentType),
               );
 
               final downloadUrl = await uploadTask.ref.getDownloadURL();
@@ -949,11 +995,14 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                           IconButton(
                             onPressed: () async {
                               try {
+                                debugPrint('Testing audio URL: ${audioUrlController.text}');
                                 await _audioPlayer.stop();
                                 await _audioPlayer.play(UrlSource(audioUrlController.text));
+                                debugPrint('Audio playback started');
                               } catch (e) {
+                                debugPrint('Audio playback error: $e');
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('فشل في تشغيل الصوت')),
+                                  SnackBar(content: Text('فشل في تشغيل الصوت: $e')),
                                 );
                               }
                             },
