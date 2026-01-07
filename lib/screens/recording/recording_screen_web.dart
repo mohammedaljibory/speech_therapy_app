@@ -66,35 +66,71 @@ Future<bool> playAudioWeb(String url) async {
     // Stop any existing audio
     stopAudioWeb();
 
-    // Create new audio element
-    _audioElement = html.AudioElement(url);
-    _audioElement!.crossOrigin = 'anonymous';
+    // Method 1: Fetch as blob and create blob URL to avoid CORS issues
+    try {
+      final response = await html.HttpRequest.request(
+        url,
+        method: 'GET',
+        responseType: 'blob',
+      );
 
-    // Wait for audio to be ready
-    final completer = Completer<bool>();
+      if (response.status == 200) {
+        final blob = response.response as html.Blob;
+        final blobUrl = html.Url.createObjectUrlFromBlob(blob);
+        print('Created blob URL: $blobUrl from ${blob.size} bytes');
 
-    _audioElement!.onCanPlay.listen((_) {
-      _audioElement!.play();
-      print('HTML5 Audio playback started');
-      completer.complete(true);
-    });
+        _audioElement = html.AudioElement(blobUrl);
+        await _audioElement!.play();
+        print('HTML5 Audio playback started via blob URL');
+        return true;
+      }
+    } catch (fetchError) {
+      print('Blob fetch failed: $fetchError, trying direct URL...');
+    }
 
-    _audioElement!.onError.listen((event) {
-      print('HTML5 Audio error: ${_audioElement!.error?.code}');
-      completer.complete(false);
-    });
+    // Method 2: Try direct URL playback
+    _audioElement = html.AudioElement();
+    _audioElement!.src = url;
+    _audioElement!.preload = 'auto';
 
-    // Load the audio
-    _audioElement!.load();
+    try {
+      await _audioElement!.play();
+      print('HTML5 Audio playback started via direct URL');
+      return true;
+    } catch (playError) {
+      print('Direct play failed: $playError');
 
-    // Timeout after 10 seconds
-    return await completer.future.timeout(
-      const Duration(seconds: 10),
-      onTimeout: () {
-        print('HTML5 Audio timeout');
-        return false;
-      },
-    );
+      // Method 3: Wait for canPlayThrough
+      final completer = Completer<bool>();
+      var completed = false;
+
+      _audioElement!.onCanPlayThrough.first.then((_) {
+        if (!completed) {
+          completed = true;
+          _audioElement!.play();
+          print('HTML5 Audio playback started after load');
+          completer.complete(true);
+        }
+      });
+
+      _audioElement!.onError.first.then((event) {
+        if (!completed) {
+          completed = true;
+          print('HTML5 Audio error: ${_audioElement!.error?.code} - ${_audioElement!.error?.message}');
+          completer.complete(false);
+        }
+      });
+
+      _audioElement!.load();
+
+      return await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('HTML5 Audio timeout');
+          return false;
+        },
+      );
+    }
   } catch (e) {
     print('Error playing audio via HTML5: $e');
     return false;
