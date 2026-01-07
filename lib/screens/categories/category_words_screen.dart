@@ -126,13 +126,36 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
       // If there's a custom audio URL, play it
       if (word.correctPronunciationUrl.isNotEmpty) {
         debugPrint('Playing audio URL: ${word.correctPronunciationUrl}');
-        await _audioPlayer.stop();
 
-        try {
-          await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
-          debugPrint('Audio playback started successfully');
-        } catch (audioError) {
-          debugPrint('AudioPlayer error: $audioError');
+        bool playbackSuccess = false;
+
+        if (kIsWeb) {
+          // Use HTML5 Audio for web (more reliable)
+          playbackSuccess = await platform.playAudioWeb(word.correctPronunciationUrl);
+          if (playbackSuccess) {
+            debugPrint('HTML5 Audio playback started successfully');
+            // Auto-reset playing state after a delay (since we can't easily track HTML5 audio end)
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted && _playingWordId == word.id) {
+                setState(() => _playingWordId = null);
+              }
+            });
+          }
+        } else {
+          // Use audioplayers for mobile
+          try {
+            await _audioPlayer.stop();
+            await _audioPlayer.play(UrlSource(word.correctPronunciationUrl));
+            playbackSuccess = true;
+            debugPrint('AudioPlayer playback started successfully');
+          } catch (audioError) {
+            debugPrint('AudioPlayer error: $audioError');
+            playbackSuccess = false;
+          }
+        }
+
+        if (!playbackSuccess) {
+          debugPrint('Audio playback failed, falling back to TTS');
           // If audio fails, try TTS as fallback
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -720,9 +743,9 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
               AudioEncoder encoder;
 
               if (kIsWeb) {
-                // Use WAV on web for better compatibility
-                extension = 'wav';
-                encoder = AudioEncoder.wav;
+                // Use opus/webm on web (native MediaRecorder format)
+                extension = 'webm';
+                encoder = AudioEncoder.opus;
                 path = '$filename.$extension';
               } else {
                 // Use AAC on mobile for smaller file size
@@ -733,7 +756,7 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
 
               final config = RecordConfig(
                 encoder: encoder,
-                sampleRate: 44100,
+                sampleRate: 16000,
                 bitRate: 128000,
               );
 
@@ -777,8 +800,8 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
               }
 
               // Upload to Firebase Storage
-              final audioExtension = kIsWeb ? 'wav' : 'm4a';
-              final contentType = kIsWeb ? 'audio/wav' : 'audio/mp4';
+              final audioExtension = kIsWeb ? 'webm' : 'm4a';
+              final contentType = kIsWeb ? 'audio/webm' : 'audio/mp4';
 
               final storageRef = FirebaseStorage.instance
                   .ref()
@@ -996,8 +1019,17 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                             onPressed: () async {
                               try {
                                 debugPrint('Testing audio URL: ${audioUrlController.text}');
-                                await _audioPlayer.stop();
-                                await _audioPlayer.play(UrlSource(audioUrlController.text));
+                                if (kIsWeb) {
+                                  final success = await platform.playAudioWeb(audioUrlController.text);
+                                  if (!success) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('فشل في تشغيل الصوت')),
+                                    );
+                                  }
+                                } else {
+                                  await _audioPlayer.stop();
+                                  await _audioPlayer.play(UrlSource(audioUrlController.text));
+                                }
                                 debugPrint('Audio playback started');
                               } catch (e) {
                                 debugPrint('Audio playback error: $e');
@@ -1042,8 +1074,20 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                         onPressed: () async {
                           if (audioUrlController.text.isNotEmpty) {
                             try {
-                              await _audioPlayer.stop();
-                              await _audioPlayer.play(UrlSource(audioUrlController.text));
+                              if (kIsWeb) {
+                                final success = await platform.playAudioWeb(audioUrlController.text);
+                                if (!success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('فشل في تشغيل الصوت'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              } else {
+                                await _audioPlayer.stop();
+                                await _audioPlayer.play(UrlSource(audioUrlController.text));
+                              }
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

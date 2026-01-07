@@ -23,3 +23,15 @@ Future<Uint8List?> readBlobUrl(String blobUrl) async {
   // Blob URLs are web-only, this method is not used on mobile/desktop
   return null;
 }
+
+/// Play audio using HTML5 Audio (stub for non-web platforms)
+/// On mobile/desktop, use audioplayers instead
+Future<bool> playAudioWeb(String url) async {
+  // Not applicable for mobile/desktop
+  return false;
+}
+
+/// Stop HTML5 audio (stub for non-web platforms)
+void stopAudioWeb() {
+  // Not applicable for mobile/desktop
+}
