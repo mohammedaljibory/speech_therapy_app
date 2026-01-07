@@ -152,12 +152,43 @@ class _WordPracticeScreenState extends State<WordPracticeScreen>
     try {
       // If there's a custom audio URL, play it
       if (widget.word.correctPronunciationUrl.isNotEmpty) {
-        await _audioPlayer.stop();
-        await _audioPlayer.play(UrlSource(widget.word.correctPronunciationUrl));
+        debugPrint('Playing audio URL: ${widget.word.correctPronunciationUrl}');
 
-        _audioPlayer.onPlayerComplete.listen((_) {
-          if (mounted) setState(() => _isPlayingCorrect = false);
-        });
+        bool playbackSuccess = false;
+
+        if (kIsWeb) {
+          // Use HTML5 Audio for web (more reliable)
+          playbackSuccess = await platform.playAudioWeb(widget.word.correctPronunciationUrl);
+          if (playbackSuccess) {
+            debugPrint('HTML5 Audio playback started successfully');
+            // Auto-reset playing state after a delay
+            Future.delayed(const Duration(seconds: 5), () {
+              if (mounted) setState(() => _isPlayingCorrect = false);
+            });
+          }
+        } else {
+          // Use audioplayers for mobile
+          try {
+            await _audioPlayer.stop();
+            await _audioPlayer.play(UrlSource(widget.word.correctPronunciationUrl));
+            playbackSuccess = true;
+
+            _audioPlayer.onPlayerComplete.listen((_) {
+              if (mounted) setState(() => _isPlayingCorrect = false);
+            });
+          } catch (audioError) {
+            debugPrint('AudioPlayer error: $audioError');
+            playbackSuccess = false;
+          }
+        }
+
+        if (!playbackSuccess) {
+          // Fallback to TTS
+          debugPrint('Audio playback failed, falling back to TTS');
+          _showSnackBar('فشل تشغيل الصوت، جاري استخدام النطق التلقائي...', isError: false);
+          await _flutterTts.stop();
+          await _flutterTts.speak(widget.word.text);
+        }
       } else {
         // Use Text-to-Speech
         await _flutterTts.stop();
