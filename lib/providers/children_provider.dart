@@ -156,6 +156,12 @@ class ChildrenProvider with ChangeNotifier {
     String? parentId,
     String? profileImageUrl,
     String? notes,
+    String? medicalHistory,
+    String? familyHistory,
+    String? behaviorNotes,
+    String? preferences,
+    double? height,
+    double? weight,
   }) async {
     _setLoading(true);
     _clearError();
@@ -172,6 +178,12 @@ class ChildrenProvider with ChangeNotifier {
       if (parentId != null) updates['parentId'] = parentId;
       if (profileImageUrl != null) updates['profileImageUrl'] = profileImageUrl;
       if (notes != null) updates['notes'] = notes.trim();
+      if (medicalHistory != null) updates['medicalHistory'] = medicalHistory.trim();
+      if (familyHistory != null) updates['familyHistory'] = familyHistory.trim();
+      if (behaviorNotes != null) updates['behaviorNotes'] = behaviorNotes.trim();
+      if (preferences != null) updates['preferences'] = preferences.trim();
+      if (height != null) updates['height'] = height;
+      if (weight != null) updates['weight'] = weight;
 
       await _firestore
           .collection(AppConstants.childrenCollection)
@@ -189,6 +201,12 @@ class ChildrenProvider with ChangeNotifier {
           parentId: parentId ?? _children[index].parentId,
           profileImageUrl: profileImageUrl ?? _children[index].profileImageUrl,
           notes: notes ?? _children[index].notes,
+          medicalHistory: medicalHistory ?? _children[index].medicalHistory,
+          familyHistory: familyHistory ?? _children[index].familyHistory,
+          behaviorNotes: behaviorNotes ?? _children[index].behaviorNotes,
+          preferences: preferences ?? _children[index].preferences,
+          height: height ?? _children[index].height,
+          weight: weight ?? _children[index].weight,
           updatedAt: DateTime.now(),
         );
       }

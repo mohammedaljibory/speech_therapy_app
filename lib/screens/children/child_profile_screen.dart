@@ -247,9 +247,37 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
               ],
             ),
 
-            if (_child!.notes != null && _child!.notes!.isNotEmpty) ...[
+            // Physical info
+            if (_child!.height != null || _child!.weight != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_child!.height != null)
+                    _buildInfoBadge(
+                      icon: Icons.height,
+                      text: '${_child!.height!.toStringAsFixed(0)} سم',
+                    ),
+                  if (_child!.height != null && _child!.weight != null)
+                    const SizedBox(width: 12),
+                  if (_child!.weight != null)
+                    _buildInfoBadge(
+                      icon: Icons.monitor_weight,
+                      text: '${_child!.weight!.toStringAsFixed(0)} كغ',
+                    ),
+                ],
+              ),
+            ],
+
+            // History section
+            if (_hasHistoryInfo()) ...[
               const SizedBox(height: 16),
               const Divider(),
+              const SizedBox(height: 12),
+              _buildHistorySection(),
+            ],
+
+            if (_child!.notes != null && _child!.notes!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
                 _child!.notes!,
@@ -283,6 +311,89 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
             style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _hasHistoryInfo() {
+    return (_child!.medicalHistory != null && _child!.medicalHistory!.isNotEmpty) ||
+        (_child!.familyHistory != null && _child!.familyHistory!.isNotEmpty) ||
+        (_child!.behaviorNotes != null && _child!.behaviorNotes!.isNotEmpty) ||
+        (_child!.preferences != null && _child!.preferences!.isNotEmpty);
+  }
+
+  Widget _buildHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_child!.medicalHistory != null && _child!.medicalHistory!.isNotEmpty)
+          _buildHistoryItem(
+            icon: Icons.medical_services,
+            title: 'التاريخ الطبي',
+            content: _child!.medicalHistory!,
+            color: Colors.red.shade400,
+          ),
+        if (_child!.familyHistory != null && _child!.familyHistory!.isNotEmpty)
+          _buildHistoryItem(
+            icon: Icons.family_restroom,
+            title: 'التاريخ العائلي',
+            content: _child!.familyHistory!,
+            color: AppColors.primaryPurple,
+          ),
+        if (_child!.behaviorNotes != null && _child!.behaviorNotes!.isNotEmpty)
+          _buildHistoryItem(
+            icon: Icons.psychology,
+            title: 'السلوك',
+            content: _child!.behaviorNotes!,
+            color: AppColors.primaryOrange,
+          ),
+        if (_child!.preferences != null && _child!.preferences!.isNotEmpty)
+          _buildHistoryItem(
+            icon: Icons.favorite,
+            title: 'يحب ويكره',
+            content: _child!.preferences!,
+            color: Colors.pink,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHistoryItem({
+    required IconData icon,
+    required String title,
+    required String content,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  content,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -621,6 +732,12 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
   void _showEditChildDialog() {
     final nameController = TextEditingController(text: _child!.name);
     final notesController = TextEditingController(text: _child!.notes ?? '');
+    final medicalHistoryController = TextEditingController(text: _child!.medicalHistory ?? '');
+    final familyHistoryController = TextEditingController(text: _child!.familyHistory ?? '');
+    final behaviorNotesController = TextEditingController(text: _child!.behaviorNotes ?? '');
+    final preferencesController = TextEditingController(text: _child!.preferences ?? '');
+    final heightController = TextEditingController(text: _child!.height?.toString() ?? '');
+    final weightController = TextEditingController(text: _child!.weight?.toString() ?? '');
     int selectedAge = _child!.age;
     String selectedGender = _child!.gender;
     String selectedLevel = _child!.level;
@@ -631,176 +748,257 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Text('تعديل بيانات الطفل', textAlign: TextAlign.center),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(
-                    labelText: 'اسم الطفل',
-                    prefixIcon: const Icon(Icons.person),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Basic Info Section
+                  _buildSectionHeader('المعلومات الأساسية'),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'اسم الطفل',
+                      prefixIcon: const Icon(Icons.person),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Age selector
-                const Text('العمر:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 50,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 15,
-                    itemBuilder: (context, index) {
-                      final age = index + 1;
-                      final isSelected = age == selectedAge;
-                      return GestureDetector(
-                        onTap: () => setDialogState(() => selectedAge = age),
-                        child: Container(
-                          width: 40,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primaryBlue : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 16),
+                  // Age selector
+                  const Text('العمر:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 50,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: 15,
+                      itemBuilder: (context, index) {
+                        final age = index + 1;
+                        final isSelected = age == selectedAge;
+                        return GestureDetector(
+                          onTap: () => setDialogState(() => selectedAge = age),
+                          child: Container(
+                            width: 40,
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primaryBlue : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '$age',
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           ),
-                          child: Center(
-                            child: Text(
-                              '$age',
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Gender selector
+                  const Text('الجنس:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedGender = 'male'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: selectedGender == 'male'
+                                  ? AppColors.primaryBlue.withOpacity(0.1)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selectedGender == 'male'
+                                    ? AppColors.primaryBlue
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.male,
+                                    color: selectedGender == 'male'
+                                        ? AppColors.primaryBlue
+                                        : Colors.grey),
+                                const SizedBox(width: 4),
+                                Text('ذكر',
+                                    style: TextStyle(
+                                        color: selectedGender == 'male'
+                                            ? AppColors.primaryBlue
+                                            : Colors.grey)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedGender = 'female'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: selectedGender == 'female'
+                                  ? AppColors.primaryPink.withOpacity(0.1)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: selectedGender == 'female'
+                                    ? AppColors.primaryPink
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.female,
+                                    color: selectedGender == 'female'
+                                        ? AppColors.primaryPink
+                                        : Colors.grey),
+                                const SizedBox(width: 4),
+                                Text('أنثى',
+                                    style: TextStyle(
+                                        color: selectedGender == 'female'
+                                            ? AppColors.primaryPink
+                                            : Colors.grey)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Level selector
+                  const Text('المستوى:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: AppConstants.childLevels.map((level) {
+                      final isSelected = selectedLevel == level;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setDialogState(() => selectedLevel = level),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.primaryGreen
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text(
+                                level,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.white : Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       );
-                    },
+                    }).toList(),
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Gender selector
-                const Text('الجنس:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setDialogState(() => selectedGender = 'male'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: selectedGender == 'male'
-                                ? AppColors.primaryBlue.withOpacity(0.1)
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selectedGender == 'male'
-                                  ? AppColors.primaryBlue
-                                  : Colors.transparent,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.male,
-                                  color: selectedGender == 'male'
-                                      ? AppColors.primaryBlue
-                                      : Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('ذكر',
-                                  style: TextStyle(
-                                      color: selectedGender == 'male'
-                                          ? AppColors.primaryBlue
-                                          : Colors.grey)),
-                            ],
+                  const SizedBox(height: 16),
+                  // Height and Weight
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: heightController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'الطول (سم)',
+                            prefixIcon: const Icon(Icons.height),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setDialogState(() => selectedGender = 'female'),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: selectedGender == 'female'
-                                ? AppColors.primaryPink.withOpacity(0.1)
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selectedGender == 'female'
-                                  ? AppColors.primaryPink
-                                  : Colors.transparent,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.female,
-                                  color: selectedGender == 'female'
-                                      ? AppColors.primaryPink
-                                      : Colors.grey),
-                              const SizedBox(width: 4),
-                              Text('أنثى',
-                                  style: TextStyle(
-                                      color: selectedGender == 'female'
-                                          ? AppColors.primaryPink
-                                          : Colors.grey)),
-                            ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: weightController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'الوزن (كغ)',
+                            prefixIcon: const Icon(Icons.monitor_weight),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // Level selector
-                const Text('المستوى:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Row(
-                  children: AppConstants.childLevels.map((level) {
-                    final isSelected = selectedLevel == level;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setDialogState(() => selectedLevel = level),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? AppColors.primaryGreen
-                                : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Center(
-                            child: Text(
-                              level,
-                              style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: notesController,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: 'ملاحظات',
-                    prefixIcon: const Icon(Icons.note),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+
+                  // History Section
+                  _buildSectionHeader('التاريخ والملاحظات'),
+                  TextField(
+                    controller: medicalHistoryController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'التاريخ الطبي',
+                      hintText: 'أي حالات طبية سابقة أو حالية...',
+                      prefixIcon: const Icon(Icons.medical_services),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: familyHistoryController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'التاريخ العائلي (وراثة)',
+                      hintText: 'هل يوجد تاريخ عائلي لاضطرابات النطق أو التوحد...',
+                      prefixIcon: const Icon(Icons.family_restroom),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: behaviorNotesController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'ملاحظات السلوك',
+                      hintText: 'هادئ، نشط، عنيف أحياناً...',
+                      prefixIcon: const Icon(Icons.psychology),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: preferencesController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'ماذا يحب ويكره',
+                      hintText: 'يحب: الألوان، الموسيقى... يكره: الضوضاء...',
+                      prefixIcon: const Icon(Icons.favorite),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      labelText: 'ملاحظات عامة',
+                      prefixIcon: const Icon(Icons.note),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -827,6 +1025,24 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
                           level: selectedLevel,
                           notes: notesController.text.trim().isNotEmpty
                               ? notesController.text.trim()
+                              : null,
+                          medicalHistory: medicalHistoryController.text.trim().isNotEmpty
+                              ? medicalHistoryController.text.trim()
+                              : null,
+                          familyHistory: familyHistoryController.text.trim().isNotEmpty
+                              ? familyHistoryController.text.trim()
+                              : null,
+                          behaviorNotes: behaviorNotesController.text.trim().isNotEmpty
+                              ? behaviorNotesController.text.trim()
+                              : null,
+                          preferences: preferencesController.text.trim().isNotEmpty
+                              ? preferencesController.text.trim()
+                              : null,
+                          height: heightController.text.trim().isNotEmpty
+                              ? double.tryParse(heightController.text.trim())
+                              : null,
+                          weight: weightController.text.trim().isNotEmpty
+                              ? double.tryParse(weightController.text.trim())
                               : null,
                         );
                         if (success && ctx.mounted) {
@@ -860,6 +1076,33 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+        ],
       ),
     );
   }

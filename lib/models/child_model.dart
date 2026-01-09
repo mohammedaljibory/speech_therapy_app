@@ -11,6 +11,13 @@ class ChildModel {
   final String? parentId;
   final String? profileImageUrl;
   final String? notes;
+  // New history fields
+  final String? medicalHistory; // التاريخ الطبي
+  final String? familyHistory; // التاريخ العائلي (وراثة)
+  final String? behaviorNotes; // ملاحظات السلوك
+  final String? preferences; // ماذا يحب ويكره
+  final double? height; // الطول (سم)
+  final double? weight; // الوزن (كغ)
   final DateTime createdAt;
   final DateTime? updatedAt;
   final bool isActive;
@@ -26,6 +33,12 @@ class ChildModel {
     this.parentId,
     this.profileImageUrl,
     this.notes,
+    this.medicalHistory,
+    this.familyHistory,
+    this.behaviorNotes,
+    this.preferences,
+    this.height,
+    this.weight,
     required this.createdAt,
     this.updatedAt,
     this.isActive = true,
@@ -45,6 +58,12 @@ class ChildModel {
       parentId: data['parentId'],
       profileImageUrl: data['profileImageUrl'],
       notes: data['notes'],
+      medicalHistory: data['medicalHistory'],
+      familyHistory: data['familyHistory'],
+      behaviorNotes: data['behaviorNotes'],
+      preferences: data['preferences'],
+      height: data['height']?.toDouble(),
+      weight: data['weight']?.toDouble(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
       isActive: data['isActive'] ?? true,
@@ -64,6 +83,12 @@ class ChildModel {
       parentId: map['parentId'],
       profileImageUrl: map['profileImageUrl'],
       notes: map['notes'],
+      medicalHistory: map['medicalHistory'],
+      familyHistory: map['familyHistory'],
+      behaviorNotes: map['behaviorNotes'],
+      preferences: map['preferences'],
+      height: map['height']?.toDouble(),
+      weight: map['weight']?.toDouble(),
       createdAt: map['createdAt'] is Timestamp
           ? (map['createdAt'] as Timestamp).toDate()
           : DateTime.parse(map['createdAt'] ?? DateTime.now().toIso8601String()),
@@ -88,6 +113,12 @@ class ChildModel {
       'parentId': parentId,
       'profileImageUrl': profileImageUrl,
       'notes': notes,
+      'medicalHistory': medicalHistory,
+      'familyHistory': familyHistory,
+      'behaviorNotes': behaviorNotes,
+      'preferences': preferences,
+      'height': height,
+      'weight': weight,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
       'isActive': isActive,
@@ -107,6 +138,12 @@ class ChildModel {
       'parentId': parentId,
       'profileImageUrl': profileImageUrl,
       'notes': notes,
+      'medicalHistory': medicalHistory,
+      'familyHistory': familyHistory,
+      'behaviorNotes': behaviorNotes,
+      'preferences': preferences,
+      'height': height,
+      'weight': weight,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
       'isActive': isActive,
@@ -125,6 +162,12 @@ class ChildModel {
     String? parentId,
     String? profileImageUrl,
     String? notes,
+    String? medicalHistory,
+    String? familyHistory,
+    String? behaviorNotes,
+    String? preferences,
+    double? height,
+    double? weight,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isActive,
@@ -140,6 +183,12 @@ class ChildModel {
       parentId: parentId ?? this.parentId,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       notes: notes ?? this.notes,
+      medicalHistory: medicalHistory ?? this.medicalHistory,
+      familyHistory: familyHistory ?? this.familyHistory,
+      behaviorNotes: behaviorNotes ?? this.behaviorNotes,
+      preferences: preferences ?? this.preferences,
+      height: height ?? this.height,
+      weight: weight ?? this.weight,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isActive: isActive ?? this.isActive,
