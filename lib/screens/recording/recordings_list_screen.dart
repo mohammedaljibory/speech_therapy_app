@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../../config/themes.dart';
 import '../../config/routes.dart';
@@ -12,6 +14,8 @@ import '../../providers/children_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/categories_provider.dart';
 import '../../widgets/common/custom_button.dart';
+import 'recording_screen_io.dart'
+    if (dart.library.html) 'recording_screen_web.dart' as platform;
 
 class RecordingsListScreen extends StatefulWidget {
   final String? childId;
@@ -27,6 +31,13 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
   List<ChildModel> _children = [];
   String? _selectedChildId;
   bool _isLoading = true;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -286,61 +297,89 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
                 ),
               ],
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.all(16),
-              leading: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: _getScoreColor(score).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Center(
-                  child: Text(
-                    '${score.toInt()}%',
-                    style: TextStyle(
-                      color: _getScoreColor(score),
-                      fontWeight: FontWeight.bold,
+            child: InkWell(
+              onTap: () => _showRecordingDetails(recording, word?.text),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: _getScoreColor(score).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${score.toInt()}%',
+                              style: TextStyle(
+                                color: _getScoreColor(score),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                word?.text ?? 'كلمة غير معروفة',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              if (recording['transcription'] != null)
+                                Text(
+                                  'النص: ${recording['transcription']}',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.info_outline, color: AppColors.primaryBlue),
+                              onPressed: () => _showRecordingDetails(recording, word?.text),
+                              tooltip: 'تفاصيل',
+                            ),
+                            if (word != null)
+                              IconButton(
+                                icon: const Icon(Icons.compare_arrows, color: AppColors.primaryOrange),
+                                onPressed: () {
+                                  context.navigateTo(Routes.comparison, arguments: {
+                                    'childId': _selectedChildId,
+                                    'wordId': word.id,
+                                  });
+                                },
+                                tooltip: 'مقارنة',
+                              ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ),
-              title: Text(
-                word?.text ?? 'كلمة غير معروفة',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (recording['transcription'] != null)
-                    Text(
-                      'النص: ${recording['transcription']}',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
+                    if (recordedAt != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          DateFormat('yyyy/MM/dd - HH:mm').format(recordedAt.toDate()),
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
-                    ),
-                  if (recordedAt != null)
-                    Text(
-                      DateFormat('yyyy/MM/dd - HH:mm').format(recordedAt.toDate()),
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                ],
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.compare_arrows, color: AppColors.primaryOrange),
-                onPressed: word != null
-                    ? () {
-                        context.navigateTo(Routes.comparison, arguments: {
-                          'childId': _selectedChildId,
-                          'wordId': word.id,
-                        });
-                      }
-                    : null,
-                tooltip: 'مقارنة',
+                  ],
+                ),
               ),
             ),
           ).animate().fadeIn(delay: Duration(milliseconds: index * 50));
@@ -353,5 +392,243 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
     if (score >= 80) return Colors.green;
     if (score >= 60) return Colors.orange;
     return Colors.red;
+  }
+
+  void _showRecordingDetails(Map<String, dynamic> recording, String? wordText) {
+    final evaluation = recording['evaluation'] as Map<String, dynamic>?;
+    final audioUrl = recording['audioUrl'] as String?;
+    final recordedAt = recording['recordedAt'] as Timestamp?;
+    final score = (recording['score'] as num?)?.toDouble() ?? 0;
+
+    // Extract metrics from evaluation
+    final accuracy = (evaluation?['accuracy'] as num?)?.toDouble() ?? 0;
+    final similarity = (evaluation?['similarity'] as num?)?.toDouble() ?? 0;
+    final wer = (evaluation?['wer'] as num?)?.toDouble() ?? 0;
+    final cer = (evaluation?['cer'] as num?)?.toDouble() ?? 0;
+    final mos = (evaluation?['mos'] as num?)?.toDouble() ?? 0;
+    final feedback = evaluation?['feedback'] as String? ?? '';
+    final transcription = evaluation?['transcription'] as String? ?? recording['transcription'] as String?;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          bool isPlaying = false;
+
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Title
+                  Text(
+                    wordText ?? 'تفاصيل التسجيل',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (recordedAt != null)
+                    Text(
+                      DateFormat('yyyy/MM/dd - HH:mm').format(recordedAt.toDate()),
+                      style: TextStyle(color: AppColors.textSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Play Audio Button
+                  if (audioUrl != null && audioUrl.isNotEmpty)
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        try {
+                          setModalState(() => isPlaying = true);
+                          if (kIsWeb) {
+                            await platform.playAudioWeb(audioUrl);
+                          } else {
+                            await _audioPlayer.stop();
+                            await _audioPlayer.play(UrlSource(audioUrl));
+                          }
+                          Future.delayed(const Duration(seconds: 3), () {
+                            if (ctx.mounted) setModalState(() => isPlaying = false);
+                          });
+                        } catch (e) {
+                          setModalState(() => isPlaying = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('فشل في تشغيل الصوت: $e')),
+                          );
+                        }
+                      },
+                      icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                      label: Text(isPlaying ? 'جاري التشغيل...' : 'تشغيل التسجيل'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Score Circle
+                  Center(
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: _getScoreColor(score).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${score.toInt()}%',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: _getScoreColor(score),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Transcription
+                  if (transcription != null && transcription.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('ما قاله الطفل:', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text(
+                            transcription,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 24),
+
+                  // Metrics Grid
+                  const Text(
+                    'المقاييس التفصيلية',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildMetricTile('الدقة (Accuracy)', accuracy, '%'),
+                  _buildMetricTile('التشابه (Similarity)', similarity, '%'),
+                  _buildMetricTile('WER - معدل خطأ الكلمات', wer, '%', inverted: true),
+                  _buildMetricTile('CER - معدل خطأ الأحرف', cer, '%', inverted: true),
+                  _buildMetricTile('MOS - جودة النطق', mos, '/5', isMos: true),
+
+                  if (feedback.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryPurple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.psychology, color: AppColors.primaryPurple),
+                              const SizedBox(width: 8),
+                              const Text('ملاحظات التقييم', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(feedback, style: const TextStyle(height: 1.5)),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // Close Button
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('إغلاق'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMetricTile(String name, double value, String suffix, {bool inverted = false, bool isMos = false}) {
+    final displayValue = inverted ? (100 - value).clamp(0, 100) : value;
+    final color = isMos
+        ? (value >= 4 ? Colors.green : value >= 3 ? Colors.orange : Colors.red)
+        : (displayValue >= 70 ? Colors.green : displayValue >= 50 ? Colors.orange : Colors.red);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(name, style: const TextStyle(fontSize: 13))),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              isMos ? '${value.toStringAsFixed(1)}$suffix' : '${value.toInt()}$suffix',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

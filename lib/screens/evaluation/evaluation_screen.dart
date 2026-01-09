@@ -205,6 +205,7 @@ class _EvaluationScreenState extends State<EvaluationScreen>
   double get _similarity => _aiResult?.similarity ?? _fallbackResult?.similarity ?? 0;
   double get _wer => _aiResult?.wer ?? _fallbackResult?.wer ?? 100;
   double get _cer => _aiResult?.cer ?? _fallbackResult?.cer ?? 100;
+  double get _mos => _aiResult?.mos ?? _fallbackResult?.mos ?? 0;
   String get _level => _aiResult?.level ?? _fallbackResult?.level ?? 'يحتاج تحسين';
   String get _feedback => _aiResult?.feedback ?? _fallbackResult?.feedback ?? '';
   String? get _transcription => widget.transcription ?? _fallbackResult?.transcription;
@@ -516,10 +517,11 @@ class _EvaluationScreenState extends State<EvaluationScreen>
               children: [
                 const Text('التفاصيل', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                _buildMetricRow('الدقة', _accuracy),
-                _buildMetricRow('التشابه', _similarity),
-                _buildMetricRow('WER (أقل أفضل)', _wer, inverted: true),
-                _buildMetricRow('CER (أقل أفضل)', _cer, inverted: true),
+                _buildMetricRow('الدقة (Accuracy)', _accuracy),
+                _buildMetricRow('التشابه (Similarity)', _similarity),
+                _buildMetricRow('WER - معدل خطأ الكلمات', _wer, inverted: true),
+                _buildMetricRow('CER - معدل خطأ الأحرف', _cer, inverted: true),
+                _buildMetricRow('MOS - جودة النطق', _mos * 20), // MOS is 0-5, convert to percentage
               ],
             ),
           ),
