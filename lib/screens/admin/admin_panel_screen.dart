@@ -29,7 +29,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadData();
   }
 
@@ -42,10 +42,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // Load all users
+      // Load all users (including inactive for admin management)
       final usersSnapshot = await FirebaseFirestore.instance
           .collection(AppConstants.usersCollection)
-          .where('isActive', isEqualTo: true)
           .get();
 
       _users = usersSnapshot.docs
@@ -97,6 +96,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                         children: [
                           _buildUsersTab(),
                           _buildAssignmentsTab(),
+                          _buildStatsTab(),
                         ],
                       ),
               ),
@@ -105,10 +105,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddTrainerDialog(),
+        onPressed: () => _showAddUserOptions(),
         backgroundColor: AppColors.primaryPink,
         icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('إضافة مدرب', style: TextStyle(color: Colors.white)),
+        label: const Text('إضافة مستخدم', style: TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -172,6 +172,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
         tabs: const [
           Tab(text: 'المستخدمين'),
           Tab(text: 'تعيين الأطفال'),
+          Tab(text: 'الإحصائيات'),
         ],
       ),
     );
@@ -324,6 +325,24 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                         ),
                       ),
                     ),
+                    if (!user.isActive) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'معطل',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (user.isTrainer && assignedCount > 0) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -347,13 +366,86 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
               ],
             ),
           ),
-          if (user.isTrainer)
-            IconButton(
-              icon: const Icon(Icons.assignment_ind),
-              color: AppColors.primaryBlue,
-              onPressed: () => _showAssignChildrenDialog(user),
-              tooltip: 'تعيين أطفال',
-            ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+            onSelected: (value) {
+              switch (value) {
+                case 'edit':
+                  _showEditUserDialog(user);
+                  break;
+                case 'assign':
+                  _showAssignChildrenDialog(user);
+                  break;
+                case 'deactivate':
+                  _showDeactivateUserDialog(user);
+                  break;
+                case 'delete':
+                  _showDeleteUserDialog(user);
+                  break;
+                case 'reset_password':
+                  _showResetPasswordDialog(user);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit, color: Colors.blue, size: 20),
+                    SizedBox(width: 8),
+                    Text('تعديل'),
+                  ],
+                ),
+              ),
+              if (user.isTrainer)
+                const PopupMenuItem(
+                  value: 'assign',
+                  child: Row(
+                    children: [
+                      Icon(Icons.assignment_ind, color: Colors.purple, size: 20),
+                      SizedBox(width: 8),
+                      Text('تعيين أطفال'),
+                    ],
+                  ),
+                ),
+              const PopupMenuItem(
+                value: 'reset_password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_reset, color: Colors.orange, size: 20),
+                    SizedBox(width: 8),
+                    Text('إعادة تعيين كلمة المرور'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'deactivate',
+                child: Row(
+                  children: [
+                    Icon(
+                      user.isActive ? Icons.block : Icons.check_circle,
+                      color: user.isActive ? Colors.amber : Colors.green,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(user.isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('حذف نهائي', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -528,17 +620,351 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
     );
   }
 
-  void _showAddTrainerDialog() {
+  Widget _buildStatsTab() {
+    final trainers = _users.where((u) => u.isTrainer).toList();
+    final parents = _users.where((u) => u.isParent).toList();
+    final admins = _users.where((u) => u.isAdmin).toList();
+    final activeUsers = _users.where((u) => u.isActive).length;
+    final inactiveUsers = _users.where((u) => !u.isActive).length;
+    final unassignedChildren = _allChildren.where((c) {
+      return !trainers.any((t) => t.assignedChildrenIds.contains(c.id));
+    }).toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          // Summary stats
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.analytics, color: Colors.white, size: 40),
+                const SizedBox(height: 12),
+                const Text(
+                  'إحصائيات النظام',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatItem('المستخدمين', _users.length.toString(), Colors.white),
+                    _buildStatItem('الأطفال', _allChildren.length.toString(), Colors.white),
+                    _buildStatItem('المدربين', trainers.length.toString(), Colors.white),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // User distribution
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'توزيع المستخدمين',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 16),
+                _buildProgressRow('المدربين', trainers.length, _users.length, Colors.blue),
+                const SizedBox(height: 12),
+                _buildProgressRow('أولياء الأمور', parents.length, _users.length, Colors.green),
+                const SizedBox(height: 12),
+                _buildProgressRow('المسؤولين', admins.length, _users.length, Colors.pink),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Account status
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$activeUsers',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const Text('حسابات نشطة', style: TextStyle(color: Colors.green)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(Icons.block, color: Colors.red, size: 32),
+                      const SizedBox(height: 8),
+                      Text(
+                        '$inactiveUsers',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                      const Text('حسابات معطلة', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Unassigned children
+          if (unassignedChildren.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.warning_amber, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Text(
+                        'أطفال بدون مدرب (${unassignedChildren.length})',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: unassignedChildren.map((child) {
+                      return Chip(
+                        avatar: CircleAvatar(
+                          backgroundColor: Colors.orange.withOpacity(0.2),
+                          child: Text(
+                            child.name.isNotEmpty ? child.name[0] : '?',
+                            style: const TextStyle(fontSize: 12, color: Colors.orange),
+                          ),
+                        ),
+                        label: Text(child.name),
+                        backgroundColor: Colors.white,
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(color: color.withOpacity(0.8)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressRow(String label, int value, int total, Color color) {
+    final percentage = total > 0 ? (value / total * 100).round() : 0;
+    return Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(label, style: const TextStyle(fontSize: 13)),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: total > 0 ? value / total : 0,
+              backgroundColor: color.withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+              minHeight: 8,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '$value ($percentage%)',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showAddUserOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'إضافة مستخدم جديد',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.school, color: Colors.blue),
+              ),
+              title: const Text('مدرب', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('يمكنه إدارة الأطفال والتسجيلات'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAddUserDialog('trainer', 'مدرب');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.family_restroom, color: Colors.green),
+              ),
+              title: const Text('ولي أمر', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('يمكنه متابعة تقدم أطفاله'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAddUserDialog('parent', 'ولي أمر');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.pink.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.admin_panel_settings, color: Colors.pink),
+              ),
+              title: const Text('مسؤول', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('صلاحيات كاملة'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAddUserDialog('admin', 'مسؤول');
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddUserDialog(String role, String roleDisplayName) {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
+    final phoneController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('إضافة مدرب جديد', textAlign: TextAlign.center),
+        title: Text('إضافة $roleDisplayName جديد', textAlign: TextAlign.center),
         content: Form(
           key: formKey,
           child: SingleChildScrollView(
@@ -583,6 +1009,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                     return null;
                   },
                 ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'رقم الهاتف (اختياري)',
+                    prefixIcon: const Icon(Icons.phone),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
               ],
             ),
           ),
@@ -611,15 +1047,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                   name: nameController.text.trim(),
                   email: emailController.text.trim(),
                   password: passwordController.text,
-                  role: AppConstants.roleTrainer,
+                  role: role,
+                  phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
                 );
 
                 Navigator.pop(context); // Close loading
 
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('تم إضافة المدرب بنجاح'),
+                    SnackBar(
+                      content: Text('تم إضافة $roleDisplayName بنجاح'),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -627,7 +1064,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(authProvider.error ?? 'فشل في إضافة المدرب'),
+                      content: Text(authProvider.error ?? 'فشل في إضافة $roleDisplayName'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -753,6 +1190,431 @@ class _AdminPanelScreenState extends State<AdminPanelScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditUserDialog(UserModel user) {
+    final nameController = TextEditingController(text: user.name);
+    final phoneController = TextEditingController(text: user.phone ?? '');
+    String selectedRole = user.role;
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text('تعديل المستخدم', textAlign: TextAlign.center),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Color(Permissions.getRoleColor(user.role)).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          color: Color(Permissions.getRoleColor(user.role)),
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    user.email,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'الاسم',
+                      prefixIcon: const Icon(Icons.person),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    validator: (v) => v?.isEmpty ?? true ? 'مطلوب' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'رقم الهاتف',
+                      prefixIcon: const Icon(Icons.phone),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      hintText: 'اختياري',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(
+                      labelText: 'الدور',
+                      prefixIcon: const Icon(Icons.admin_panel_settings),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'trainer', child: Text('مدرب')),
+                      DropdownMenuItem(value: 'parent', child: Text('ولي أمر')),
+                      DropdownMenuItem(value: 'admin', child: Text('مسؤول')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => selectedRole = value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+
+                Navigator.pop(ctx);
+
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (_) => const Center(child: CircularProgressIndicator()),
+                );
+
+                try {
+                  await FirebaseFirestore.instance
+                      .collection(AppConstants.usersCollection)
+                      .doc(user.id)
+                      .update({
+                    'name': nameController.text.trim(),
+                    'phone': phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+                    'role': selectedRole,
+                  });
+
+                  Navigator.pop(context);
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('تم تحديث المستخدم بنجاح'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  _loadData();
+                } catch (e) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('حفظ', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeactivateUserDialog(UserModel user) {
+    final isCurrentlyActive = user.isActive;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Icon(
+              isCurrentlyActive ? Icons.block : Icons.check_circle,
+              color: isCurrentlyActive ? Colors.amber : Colors.green,
+            ),
+            const SizedBox(width: 8),
+            Text(isCurrentlyActive ? 'تعطيل الحساب' : 'تفعيل الحساب'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isCurrentlyActive
+                  ? 'هل أنت متأكد من تعطيل حساب "${user.name}"؟'
+                  : 'هل تريد تفعيل حساب "${user.name}"؟',
+              textAlign: TextAlign.center,
+            ),
+            if (isCurrentlyActive) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'لن يتمكن المستخدم من تسجيل الدخول بعد التعطيل',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                await FirebaseFirestore.instance
+                    .collection(AppConstants.usersCollection)
+                    .doc(user.id)
+                    .update({'isActive': !isCurrentlyActive});
+
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isCurrentlyActive
+                          ? 'تم تعطيل الحساب بنجاح'
+                          : 'تم تفعيل الحساب بنجاح',
+                    ),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                _loadData();
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isCurrentlyActive ? Colors.amber : Colors.green,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              isCurrentlyActive ? 'تعطيل' : 'تفعيل',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteUserDialog(UserModel user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever, color: Colors.red),
+            SizedBox(width: 8),
+            Text('حذف المستخدم نهائياً'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'هل أنت متأكد من حذف "${user.name}" نهائياً؟',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.red),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'هذا الإجراء لا يمكن التراجع عنه!',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                await FirebaseFirestore.instance
+                    .collection(AppConstants.usersCollection)
+                    .doc(user.id)
+                    .delete();
+
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('تم حذف المستخدم بنجاح'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                _loadData();
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('حذف نهائي', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResetPasswordDialog(UserModel user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.lock_reset, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('إعادة تعيين كلمة المرور'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'سيتم إرسال رابط إعادة تعيين كلمة المرور إلى:',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.email, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Text(
+                    user.email,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+
+              try {
+                await context.read<AuthProvider>().resetPassword(user.email);
+
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('تم إرسال رابط إعادة التعيين بنجاح'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('إرسال الرابط', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

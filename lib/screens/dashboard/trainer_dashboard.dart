@@ -826,7 +826,7 @@ class _TrainerDashboardState extends State<TrainerDashboard> {
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
                     Navigator.pop(context);
-                    // TODO: Navigate to profile edit
+                    context.navigateTo(Routes.profileEdit);
                   },
                 ),
                 ListTile(

@@ -17,6 +17,7 @@ import '../screens/evaluation/comparison_screen.dart';
 import '../screens/reports/reports_screen.dart';
 import '../screens/reports/export_report_screen.dart';
 import '../screens/admin/admin_panel_screen.dart';
+import '../screens/profile/profile_edit_screen.dart';
 import '../models/word_model.dart';
 import '../models/child_model.dart';
 
@@ -40,6 +41,7 @@ class Routes {
   static const String reports = '/reports';
   static const String exportReport = '/reports/export';
   static const String adminPanel = '/admin';
+  static const String profileEdit = '/profile/edit';
 }
 
 /// App Route Generator
@@ -180,6 +182,10 @@ class AppRoutes {
     // Admin Routes
       case Routes.adminPanel:
         return _buildRoute(const AdminPanelScreen(), settings);
+
+    // Profile Routes
+      case Routes.profileEdit:
+        return _buildRoute(const ProfileEditScreen(), settings);
 
       default:
         return _errorRoute('Page not found');
