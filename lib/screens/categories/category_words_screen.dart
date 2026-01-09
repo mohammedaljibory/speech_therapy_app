@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:record/record.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data';
 import '../recording/recording_screen_io.dart'
     if (dart.library.html) '../recording/recording_screen_web.dart' as platform;
@@ -1043,6 +1044,110 @@ class _CategoryWordsScreenState extends State<CategoryWordsScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+
+                  // Upload Audio File Button
+                  OutlinedButton.icon(
+                    onPressed: isUploading || isRecording
+                        ? null
+                        : () async {
+                            try {
+                              final result = await FilePicker.platform.pickFiles(
+                                type: FileType.audio,
+                                allowMultiple: false,
+                                withData: true,
+                              );
+
+                              if (result != null && result.files.isNotEmpty) {
+                                final file = result.files.first;
+                                final bytes = file.bytes;
+
+                                if (bytes == null || bytes.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('فشل في قراءة الملف')),
+                                  );
+                                  return;
+                                }
+
+                                setDialogState(() => isUploading = true);
+
+                                // Determine content type from extension
+                                final extension = file.extension?.toLowerCase() ?? 'mp3';
+                                String contentType;
+                                switch (extension) {
+                                  case 'mp3':
+                                    contentType = 'audio/mpeg';
+                                    break;
+                                  case 'wav':
+                                    contentType = 'audio/wav';
+                                    break;
+                                  case 'm4a':
+                                    contentType = 'audio/mp4';
+                                    break;
+                                  case 'ogg':
+                                    contentType = 'audio/ogg';
+                                    break;
+                                  case 'webm':
+                                    contentType = 'audio/webm';
+                                    break;
+                                  default:
+                                    contentType = 'audio/mpeg';
+                                }
+
+                                // Upload to Firebase Storage
+                                final storageRef = FirebaseStorage.instance
+                                    .ref()
+                                    .child('word_audio')
+                                    .child('${word.id}_${DateTime.now().millisecondsSinceEpoch}.$extension');
+
+                                debugPrint('Uploading audio file: ${bytes.length} bytes as $contentType');
+
+                                final uploadTask = await storageRef.putData(
+                                  bytes,
+                                  SettableMetadata(contentType: contentType),
+                                );
+
+                                final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+                                setDialogState(() {
+                                  audioUrlController.text = downloadUrl;
+                                  isUploading = false;
+                                });
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('تم رفع الملف بنجاح'),
+                                    backgroundColor: AppColors.success,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setDialogState(() => isUploading = false);
+                              debugPrint('Upload error: $e');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('فشل في رفع الملف: $e')),
+                              );
+                            }
+                          },
+                    icon: Icon(
+                      Icons.upload_file,
+                      color: isUploading || isRecording ? Colors.grey : AppColors.primaryOrange,
+                    ),
+                    label: Text(
+                      'رفع ملف صوتي',
+                      style: TextStyle(
+                        color: isUploading || isRecording ? Colors.grey : AppColors.primaryOrange,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(
+                        color: isUploading || isRecording ? Colors.grey : AppColors.primaryOrange,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+
                   const SizedBox(height: 12),
 
                   // Or use URL
