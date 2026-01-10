@@ -72,6 +72,7 @@ class EvaluationProvider with ChangeNotifier {
     required String wordId,
     required String audioUrl,
     required int durationMs,
+    String? wordText,
     String? sessionId,
     int attemptNumber = 1,
   }) async {
@@ -85,6 +86,7 @@ class EvaluationProvider with ChangeNotifier {
         id: docRef.id,
         childId: childId,
         wordId: wordId,
+        wordText: wordText,
         audioUrl: audioUrl,
         durationMs: durationMs,
         recordedAt: DateTime.now(),

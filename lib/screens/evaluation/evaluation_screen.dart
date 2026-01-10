@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 
 import '../../config/themes.dart';
 import '../../config/routes.dart';
@@ -46,6 +49,7 @@ class _EvaluationScreenState extends State<EvaluationScreen>
   AIEvaluationResult? _aiResult;
   EvaluationResult? _fallbackResult;
   String? _error;
+  String? _uploadedAudioUrl; // Firebase Storage URL
 
   late AnimationController _scoreAnimationController;
   late Animation<double> _scoreAnimation;
@@ -126,10 +130,17 @@ class _EvaluationScreenState extends State<EvaluationScreen>
     try {
       final evaluationProvider = context.read<EvaluationProvider>();
 
+      // Upload audio to Firebase Storage first
+      final audioUrl = await _uploadAudioToStorage();
+      if (audioUrl == null) {
+        debugPrint('Failed to upload audio, saving with original path');
+      }
+
       final recording = await evaluationProvider.addRecording(
         childId: widget.child.id,
         wordId: widget.word.id,
-        audioUrl: widget.recordingPath,
+        wordText: widget.word.text,
+        audioUrl: audioUrl ?? widget.recordingPath,
         durationMs: 2000,
       );
 
@@ -154,14 +165,66 @@ class _EvaluationScreenState extends State<EvaluationScreen>
     }
   }
 
+  /// Upload audio to Firebase Storage and return the download URL
+  Future<String?> _uploadAudioToStorage() async {
+    // Return cached URL if already uploaded
+    if (_uploadedAudioUrl != null) return _uploadedAudioUrl;
+
+    try {
+      final recordingPath = widget.recordingPath;
+
+      // Get audio bytes
+      final response = await http.get(Uri.parse(recordingPath));
+      if (response.statusCode != 200) {
+        debugPrint('Failed to fetch audio from blob URL');
+        return null;
+      }
+
+      final audioBytes = response.bodyBytes;
+      if (audioBytes.isEmpty) {
+        debugPrint('Audio bytes are empty');
+        return null;
+      }
+
+      // Create unique filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = kIsWeb ? 'webm' : 'm4a';
+      final fileName = 'recordings/${widget.child.id}/${widget.word.id}_$timestamp.$extension';
+
+      // Upload to Firebase Storage
+      final storageRef = FirebaseStorage.instance.ref().child(fileName);
+      final metadata = SettableMetadata(
+        contentType: kIsWeb ? 'audio/webm' : 'audio/m4a',
+      );
+
+      await storageRef.putData(audioBytes, metadata);
+
+      // Get download URL
+      _uploadedAudioUrl = await storageRef.getDownloadURL();
+      debugPrint('Audio uploaded successfully: $_uploadedAudioUrl');
+
+      return _uploadedAudioUrl;
+    } catch (e) {
+      debugPrint('Error uploading audio: $e');
+      return null;
+    }
+  }
+
   Future<void> _saveRecordingFromFallback(EvaluationResult result) async {
     try {
       final evaluationProvider = context.read<EvaluationProvider>();
 
+      // Upload audio to Firebase Storage first
+      final audioUrl = await _uploadAudioToStorage();
+      if (audioUrl == null) {
+        debugPrint('Failed to upload audio, saving with original path');
+      }
+
       final recording = await evaluationProvider.addRecording(
         childId: widget.child.id,
         wordId: widget.word.id,
-        audioUrl: widget.recordingPath,
+        wordText: widget.word.text,
+        audioUrl: audioUrl ?? widget.recordingPath,
         durationMs: result.durationMs,
       );
 

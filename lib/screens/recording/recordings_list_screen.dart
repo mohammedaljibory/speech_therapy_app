@@ -52,10 +52,14 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       final childrenProvider = context.read<ChildrenProvider>();
+      final categoriesProvider = context.read<CategoriesProvider>();
 
       // Load children
       await childrenProvider.loadChildren(authProvider.userId!);
       _children = childrenProvider.children;
+
+      // Load categories and words
+      await categoriesProvider.loadCategories();
 
       // If no child selected and we have children, select first
       if (_selectedChildId == null && _children.isNotEmpty) {
@@ -281,8 +285,13 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
           final recording = _recordings[index];
           final wordId = recording['wordId'] as String?;
           final word = wordId != null ? categoriesProvider.getWordById(wordId) : null;
-          final score = (recording['score'] as num?)?.toDouble() ?? 0;
+          // Get score from evaluation.overallScore or fallback to score field
+          final evaluation = recording['evaluation'] as Map<String, dynamic>?;
+          final score = (evaluation?['overallScore'] as num?)?.toDouble() ??
+                        (recording['score'] as num?)?.toDouble() ?? 0;
           final recordedAt = recording['recordedAt'] as Timestamp?;
+          // Get word text from recording if available
+          final wordText = word?.text ?? recording['wordText'] as String?;
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
@@ -298,7 +307,7 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
               ],
             ),
             child: InkWell(
-              onTap: () => _showRecordingDetails(recording, word?.text),
+              onTap: () => _showRecordingDetails(recording, wordText),
               borderRadius: BorderRadius.circular(16),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -330,12 +339,12 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                word?.text ?? 'كلمة غير معروفة',
+                                wordText ?? 'كلمة غير معروفة',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                               ),
-                              if (recording['transcription'] != null)
+                              if (evaluation?['transcription'] != null || recording['transcription'] != null)
                                 Text(
-                                  'النص: ${recording['transcription']}',
+                                  'النص: ${evaluation?['transcription'] ?? recording['transcription']}',
                                   style: TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 13,
@@ -349,7 +358,7 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.info_outline, color: AppColors.primaryBlue),
-                              onPressed: () => _showRecordingDetails(recording, word?.text),
+                              onPressed: () => _showRecordingDetails(recording, wordText),
                               tooltip: 'تفاصيل',
                             ),
                             if (word != null)

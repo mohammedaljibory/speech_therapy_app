@@ -5,6 +5,7 @@ class RecordingModel {
   final String id;
   final String childId;
   final String wordId;
+  final String? wordText; // Store word text for display
   final String audioUrl;
   final int durationMs; // Duration in milliseconds
   final DateTime recordedAt;
@@ -19,6 +20,7 @@ class RecordingModel {
     required this.id,
     required this.childId,
     required this.wordId,
+    this.wordText,
     required this.audioUrl,
     required this.durationMs,
     required this.recordedAt,
@@ -37,6 +39,7 @@ class RecordingModel {
       id: doc.id,
       childId: data['childId'] ?? '',
       wordId: data['wordId'] ?? '',
+      wordText: data['wordText'],
       audioUrl: data['audioUrl'] ?? '',
       durationMs: data['durationMs'] ?? 0,
       recordedAt: (data['recordedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -57,6 +60,7 @@ class RecordingModel {
       id: map['id'] ?? '',
       childId: map['childId'] ?? '',
       wordId: map['wordId'] ?? '',
+      wordText: map['wordText'],
       audioUrl: map['audioUrl'] ?? '',
       durationMs: map['durationMs'] ?? 0,
       recordedAt: map['recordedAt'] is Timestamp
@@ -78,6 +82,7 @@ class RecordingModel {
     return {
       'childId': childId,
       'wordId': wordId,
+      'wordText': wordText,
       'audioUrl': audioUrl,
       'durationMs': durationMs,
       'recordedAt': Timestamp.fromDate(recordedAt),
@@ -96,6 +101,7 @@ class RecordingModel {
       'id': id,
       'childId': childId,
       'wordId': wordId,
+      'wordText': wordText,
       'audioUrl': audioUrl,
       'durationMs': durationMs,
       'recordedAt': recordedAt.toIso8601String(),
@@ -113,6 +119,7 @@ class RecordingModel {
     String? id,
     String? childId,
     String? wordId,
+    String? wordText,
     String? audioUrl,
     int? durationMs,
     DateTime? recordedAt,
@@ -127,6 +134,7 @@ class RecordingModel {
       id: id ?? this.id,
       childId: childId ?? this.childId,
       wordId: wordId ?? this.wordId,
+      wordText: wordText ?? this.wordText,
       audioUrl: audioUrl ?? this.audioUrl,
       durationMs: durationMs ?? this.durationMs,
       recordedAt: recordedAt ?? this.recordedAt,
