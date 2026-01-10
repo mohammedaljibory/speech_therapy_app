@@ -407,7 +407,9 @@ class _RecordingsListScreenState extends State<RecordingsListScreen> {
     final evaluation = recording['evaluation'] as Map<String, dynamic>?;
     final audioUrl = recording['audioUrl'] as String?;
     final recordedAt = recording['recordedAt'] as Timestamp?;
-    final score = (recording['score'] as num?)?.toDouble() ?? 0;
+    // Get score from evaluation.overallScore
+    final score = (evaluation?['overallScore'] as num?)?.toDouble() ??
+                  (recording['score'] as num?)?.toDouble() ?? 0;
 
     // Extract metrics from evaluation
     final accuracy = (evaluation?['accuracy'] as num?)?.toDouble() ?? 0;
