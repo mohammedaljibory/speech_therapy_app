@@ -159,19 +159,75 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
       ),
       child: pw.Column(
         children: [
+          // Logo
+          pw.Container(
+            width: 80,
+            height: 80,
+            decoration: pw.BoxDecoration(
+              gradient: const pw.LinearGradient(
+                colors: [PdfColors.blue400, PdfColors.purple400],
+                begin: pw.Alignment.topLeft,
+                end: pw.Alignment.bottomRight,
+              ),
+              borderRadius: pw.BorderRadius.circular(20),
+            ),
+            child: pw.Center(
+              child: pw.Stack(
+                alignment: pw.Alignment.center,
+                children: [
+                  pw.Container(
+                    width: 50,
+                    height: 50,
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.white,
+                      borderRadius: pw.BorderRadius.circular(25),
+                    ),
+                  ),
+                  pw.Text(
+                    'ن',
+                    style: pw.TextStyle(
+                      fontSize: 32,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.blue700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 15),
           pw.Text(
-            'تقرير تقدم الطفل',
+            'نظام تحسين النطق',
             style: pw.TextStyle(
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.blue900,
             ),
           ),
-          pw.SizedBox(height: 10),
           pw.Text(
-            'تقرير ${_report!.typeLabel}',
-            style: const pw.TextStyle(fontSize: 16, color: PdfColors.blue700),
+            'لأطفال التوحد',
+            style: pw.TextStyle(
+              fontSize: 14,
+              color: PdfColors.blue700,
+            ),
           ),
+          pw.SizedBox(height: 15),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.blue100,
+              borderRadius: pw.BorderRadius.circular(20),
+            ),
+            child: pw.Text(
+              'تقرير تقدم الطفل - ${_report!.typeLabel}',
+              style: pw.TextStyle(
+                fontSize: 16,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.blue800,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 8),
           pw.Text(
             _report!.dateRangeString,
             style: const pw.TextStyle(fontSize: 14, color: PdfColors.grey700),
@@ -224,16 +280,27 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
             style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 10),
+
+          // Basic Statistics Table
+          pw.Text(
+            'الإحصائيات الأساسية',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue700),
+          ),
+          pw.SizedBox(height: 5),
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey300),
             children: [
               pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+                decoration: const pw.BoxDecoration(color: PdfColors.blue50),
                 children: [
                   _buildTableCell('المقياس', isHeader: true),
                   _buildTableCell('القيمة', isHeader: true),
                 ],
               ),
+              pw.TableRow(children: [
+                _buildTableCell('عدد الجلسات'),
+                _buildTableCell('${metrics.totalSessions}'),
+              ]),
               pw.TableRow(children: [
                 _buildTableCell('عدد التسجيلات'),
                 _buildTableCell('${metrics.totalRecordings}'),
@@ -247,29 +314,125 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
                 _buildTableCell('${metrics.wordsCompleted}'),
               ]),
               pw.TableRow(children: [
-                _buildTableCell('متوسط الدقة'),
-                _buildTableCell('${metrics.averageAccuracy.toStringAsFixed(1)}%'),
-              ]),
-              pw.TableRow(children: [
-                _buildTableCell('متوسط التشابه'),
-                _buildTableCell('${metrics.averageSimilarity.toStringAsFixed(1)}%'),
-              ]),
-              pw.TableRow(children: [
                 _buildTableCell('وقت التمرين'),
                 _buildTableCell(metrics.formattedPracticeTime),
               ]),
+            ],
+          ),
+
+          pw.SizedBox(height: 15),
+
+          // Detailed Metrics Table
+          pw.Text(
+            'مقاييس التقييم التفصيلية',
+            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.purple700),
+          ),
+          pw.SizedBox(height: 5),
+          pw.Table(
+            border: pw.TableBorder.all(color: PdfColors.grey300),
+            children: [
               pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.green50),
+                decoration: const pw.BoxDecoration(color: PdfColors.purple50),
                 children: [
-                  _buildTableCell('المستوى العام', isHeader: true),
-                  _buildTableCell(metrics.overallLevel, isHeader: true),
+                  _buildTableCell('المقياس', isHeader: true),
+                  _buildTableCell('القيمة', isHeader: true),
+                  _buildTableCell('الوصف', isHeader: true),
                 ],
               ),
+              pw.TableRow(children: [
+                _buildTableCell('الدقة (Accuracy)'),
+                _buildTableCell('${metrics.averageAccuracy.toStringAsFixed(1)}%'),
+                _buildTableCell(_getAccuracyDescription(metrics.averageAccuracy)),
+              ]),
+              pw.TableRow(children: [
+                _buildTableCell('التشابه (Similarity)'),
+                _buildTableCell('${metrics.averageSimilarity.toStringAsFixed(1)}%'),
+                _buildTableCell(_getSimilarityDescription(metrics.averageSimilarity)),
+              ]),
+              pw.TableRow(children: [
+                _buildTableCell('معدل خطأ الكلمات (WER)'),
+                _buildTableCell('${metrics.averageWer.toStringAsFixed(1)}%'),
+                _buildTableCell(_getWerDescription(metrics.averageWer)),
+              ]),
+              pw.TableRow(children: [
+                _buildTableCell('معدل خطأ الأحرف (CER)'),
+                _buildTableCell('${metrics.averageCer.toStringAsFixed(1)}%'),
+                _buildTableCell(_getCerDescription(metrics.averageCer)),
+              ]),
+              pw.TableRow(children: [
+                _buildTableCell('تقييم جودة النطق (MOS)'),
+                _buildTableCell('${metrics.averageMos.toStringAsFixed(1)}/5'),
+                _buildTableCell(_getMosDescription(metrics.averageMos)),
+              ]),
             ],
+          ),
+
+          pw.SizedBox(height: 15),
+
+          // Overall Level
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.green50,
+              borderRadius: pw.BorderRadius.circular(8),
+              border: pw.Border.all(color: PdfColors.green200),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Text(
+                  'المستوى العام: ',
+                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.Text(
+                  metrics.overallLevel,
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.green700,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _getAccuracyDescription(double value) {
+    if (value >= 90) return 'ممتاز';
+    if (value >= 70) return 'جيد';
+    if (value >= 50) return 'متوسط';
+    return 'يحتاج تحسين';
+  }
+
+  String _getSimilarityDescription(double value) {
+    if (value >= 90) return 'تطابق عالي';
+    if (value >= 70) return 'تشابه جيد';
+    if (value >= 50) return 'تشابه متوسط';
+    return 'يحتاج تحسين';
+  }
+
+  String _getWerDescription(double value) {
+    if (value <= 10) return 'ممتاز';
+    if (value <= 25) return 'جيد';
+    if (value <= 50) return 'متوسط';
+    return 'يحتاج تحسين';
+  }
+
+  String _getCerDescription(double value) {
+    if (value <= 10) return 'ممتاز';
+    if (value <= 25) return 'جيد';
+    if (value <= 50) return 'متوسط';
+    return 'يحتاج تحسين';
+  }
+
+  String _getMosDescription(double value) {
+    if (value >= 4) return 'جودة عالية';
+    if (value >= 3) return 'جودة جيدة';
+    if (value >= 2) return 'جودة متوسطة';
+    return 'يحتاج تحسين';
   }
 
   pw.Widget _buildTableCell(String text, {bool isHeader = false}) {
@@ -286,29 +449,85 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
   }
 
   pw.Widget _buildPdfSummary() {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(15),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.green50,
-        borderRadius: pw.BorderRadius.circular(8),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'التوصيات',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // Metrics Explanation
+        pw.Container(
+          padding: const pw.EdgeInsets.all(15),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.blue50,
+            borderRadius: pw.BorderRadius.circular(8),
           ),
-          pw.SizedBox(height: 10),
-          pw.Text('• استمر في التمرين اليومي على الكلمات'),
-          pw.Text('• ركز على الكلمات التي تحتاج تحسين'),
-          pw.Text('• استخدم التسجيلات للمقارنة ومتابعة التقدم'),
-          if (_report!.notes != null) ...[
-            pw.SizedBox(height: 10),
-            pw.Text('ملاحظات: ${_report!.notes}'),
-          ],
-        ],
-      ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'شرح المقاييس',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.blue800),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('• الدقة (Accuracy): نسبة الكلمات المنطوقة بشكل صحيح', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('• التشابه (Similarity): مدى تشابه النطق مع النطق المرجعي', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('• WER (معدل خطأ الكلمات): نسبة الكلمات الخاطئة - كلما قل كان أفضل', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('• CER (معدل خطأ الأحرف): نسبة الأحرف الخاطئة - كلما قل كان أفضل', style: const pw.TextStyle(fontSize: 10)),
+              pw.Text('• MOS (تقييم جودة النطق): تقييم من 1-5 لجودة النطق الإجمالية', style: const pw.TextStyle(fontSize: 10)),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 15),
+
+        // Recommendations
+        pw.Container(
+          padding: const pw.EdgeInsets.all(15),
+          decoration: pw.BoxDecoration(
+            color: PdfColors.green50,
+            borderRadius: pw.BorderRadius.circular(8),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'التوصيات',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.green800),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('• استمر في التمرين اليومي على الكلمات'),
+              pw.Text('• ركز على الكلمات التي تحتاج تحسين'),
+              pw.Text('• استخدم التسجيلات للمقارنة ومتابعة التقدم'),
+              pw.Text('• راقب معدلات الخطأ (WER, CER) للتحسن المستمر'),
+              if (_report!.notes != null) ...[
+                pw.SizedBox(height: 10),
+                pw.Text('ملاحظات: ${_report!.notes}'),
+              ],
+            ],
+          ),
+        ),
+
+        pw.SizedBox(height: 20),
+
+        // Footer
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: pw.BorderRadius.circular(5),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'نظام تحسين النطق لأطفال التوحد',
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+              ),
+              pw.Text(
+                'تاريخ الإنشاء: ${DateFormat('yyyy/MM/dd HH:mm').format(_report!.generatedAt)}',
+                style: pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -435,29 +654,79 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.assessment, color: Colors.white, size: 48),
-          const SizedBox(height: 12),
+          // Logo
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: ShaderMask(
+                shaderCallback: (bounds) => LinearGradient(
+                  colors: [AppColors.primaryBlue, AppColors.primaryPurple],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ).createShader(bounds),
+                child: const Text(
+                  'ن',
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           const Text(
-            'تقرير تقدم الطفل',
+            'نظام تحسين النطق',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'تقرير ${_report!.typeLabel}',
-              style: const TextStyle(color: Colors.white, fontSize: 16),
+          Text(
+            'لأطفال التوحد',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 14,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(25),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.assessment, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'تقرير تقدم الطفل - ${_report!.typeLabel}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           Text(
             _report!.dateRangeString,
             style: TextStyle(color: Colors.white.withOpacity(0.8)),
@@ -540,12 +809,13 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Section Header - Basic Stats
           Row(
             children: [
-              const Icon(Icons.analytics, color: AppColors.primaryPurple),
+              const Icon(Icons.analytics, color: AppColors.primaryBlue),
               const SizedBox(width: 8),
               const Text(
-                'ملخص الأداء',
+                'الإحصائيات الأساسية',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
@@ -555,19 +825,19 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
             children: [
               Expanded(
                 child: _buildMetricTile(
-                  'التسجيلات',
-                  '${metrics.totalRecordings}',
-                  Icons.mic,
-                  AppColors.primaryBlue,
+                  'الجلسات',
+                  '${metrics.totalSessions}',
+                  Icons.calendar_today,
+                  AppColors.primaryPurple,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMetricTile(
-                  'الكلمات',
-                  '${metrics.totalWords}',
-                  Icons.text_fields,
-                  AppColors.primaryGreen,
+                  'التسجيلات',
+                  '${metrics.totalRecordings}',
+                  Icons.mic,
+                  AppColors.primaryBlue,
                 ),
               ),
             ],
@@ -577,42 +847,151 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
             children: [
               Expanded(
                 child: _buildMetricTile(
-                  'الدقة',
-                  '${metrics.averageAccuracy.toStringAsFixed(0)}%',
-                  Icons.check_circle,
-                  AppColors.primaryOrange,
+                  'الكلمات',
+                  '${metrics.totalWords}',
+                  Icons.text_fields,
+                  AppColors.primaryGreen,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildMetricTile(
-                  'وقت التمرين',
-                  metrics.formattedPracticeTime,
-                  Icons.timer,
-                  AppColors.primaryPurple,
+                  'المكتملة',
+                  '${metrics.wordsCompleted}',
+                  Icons.check_circle,
+                  AppColors.primaryOrange,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          _buildMetricTile(
+            'وقت التمرين',
+            metrics.formattedPracticeTime,
+            Icons.timer,
+            Colors.teal,
+          ),
+
+          const SizedBox(height: 24),
+
+          // Section Header - Detailed Metrics
+          Row(
+            children: [
+              const Icon(Icons.insights, color: AppColors.primaryPurple),
+              const SizedBox(width: 8),
+              const Text(
+                'مقاييس التقييم التفصيلية',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
+
+          // Accuracy & Similarity
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailedMetricTile(
+                  'الدقة',
+                  'Accuracy',
+                  '${metrics.averageAccuracy.toStringAsFixed(1)}%',
+                  Icons.gps_fixed,
+                  AppColors.primaryBlue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDetailedMetricTile(
+                  'التشابه',
+                  'Similarity',
+                  '${metrics.averageSimilarity.toStringAsFixed(1)}%',
+                  Icons.compare_arrows,
+                  AppColors.primaryGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // WER & CER
+          Row(
+            children: [
+              Expanded(
+                child: _buildDetailedMetricTile(
+                  'خطأ الكلمات',
+                  'WER',
+                  '${metrics.averageWer.toStringAsFixed(1)}%',
+                  Icons.text_snippet,
+                  Colors.orange.shade700,
+                  isErrorMetric: true,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDetailedMetricTile(
+                  'خطأ الأحرف',
+                  'CER',
+                  '${metrics.averageCer.toStringAsFixed(1)}%',
+                  Icons.abc,
+                  Colors.red.shade400,
+                  isErrorMetric: true,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // MOS Score
+          _buildDetailedMetricTile(
+            'جودة النطق',
+            'MOS Score',
+            '${metrics.averageMos.toStringAsFixed(1)} / 5',
+            Icons.star,
+            Colors.amber.shade700,
+          ),
+
+          const SizedBox(height: 20),
+
+          // Overall Level
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.primaryGreen.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primaryGreen.withOpacity(0.1),
+                  AppColors.primaryBlue.withOpacity(0.1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primaryGreen.withOpacity(0.3),
+              ),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.emoji_events, color: AppColors.primaryGreen),
-                const SizedBox(width: 8),
-                Text(
-                  'المستوى العام: ${metrics.overallLevel}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryGreen,
-                  ),
+                const Icon(Icons.emoji_events, color: AppColors.primaryGreen, size: 28),
+                const SizedBox(width: 12),
+                Column(
+                  children: [
+                    const Text(
+                      'المستوى العام',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      metrics.overallLevel,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryGreen,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -620,6 +999,70 @@ class _ExportReportScreenState extends State<ExportReportScreen> {
         ],
       ),
     ).animate().fadeIn(delay: const Duration(milliseconds: 200));
+  }
+
+  Widget _buildDetailedMetricTile(
+    String label,
+    String englishLabel,
+    String value,
+    IconData icon,
+    Color color, {
+    bool isErrorMetric = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            englishLabel,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          if (isErrorMetric)
+            Text(
+              'كلما قل كان أفضل',
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.grey.shade400,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMetricTile(String label, String value, IconData icon, Color color) {
